@@ -4,6 +4,8 @@
 // A JSON file, not SQLite: the orchestrator's config is small and human-editable.
 package store
 
+// file-kw: orchestrator store models api-keys json file key-env never-echoed keys-live-here
+
 import (
 	"encoding/json"
 	"fmt"

@@ -1,5 +1,7 @@
 package agent
 
+// file-kw: approval poll escalation signed-release retry dispatch-role poll-only never-approve human-in-the-loop
+
 // The live human-approval loop (stag Stage 5, orchestrator side). When the gate ESCALATES an
 // approval-gated call, stag-proxy returns it as an error with the approval id in the result _meta.
 // The orchestrator HOLDS the exact call, waits for a human to approve in the console (or via a

@@ -2,11 +2,12 @@
 
 ```bash
 tools/gen-env.sh      # mint the four control-plane role secrets into .env (0600, gitignored)
-docker compose up -d  # five containers
+docker compose up -d  # six containers
+tools/demo.sh         # author the policy + wire the tools
 open http://localhost:3000
 ```
 
-Five containers, two Dockerfiles:
+Six containers, two Dockerfiles:
 
 | Service | Port | Image |
 |---|---|---|
@@ -14,6 +15,7 @@ Five containers, two Dockerfiles:
 | `stag-proxy` | 8091 | the **gate's** MCP proxy — sessions bound to a recipe |
 | `harness-serve` | 8090 | the **orchestrator** — holds the model API keys |
 | `kbserve` | 8095 | example context provider (the READ channel's downstream) |
+| `pii-demo` | 9000 | an example tool server (streamable HTTP) — the containment demo |
 | `console` | 3000 | one UI, two backends |
 
 The Go services all come from **one** `Dockerfile` (`--build-arg CMD=<binary>`), on
@@ -74,15 +76,32 @@ POST /sessions  503 {"error":"gate not ready: no downstream MCP server connected
 That is fail-closed, not a fault. A gate with nothing to mediate must not pretend it is mediating. It
 polls for a downstream and starts serving the moment one is registered — no restart needed.
 
-## Registering a downstream (the one thing containers change)
+## The demo
 
-**The bundled examples' MCP servers speak `stdio`** — the gate *spawns* them as a subprocess. That
-works when you run the gate on your host (`tools/up.sh`), but a containerized gate cannot spawn them
-without baking `python3` + `kubectl` into the gate image, which would make the gate fat and couple it
-to one example. We deliberately did not do that.
+```bash
+tools/demo.sh
+```
 
-So under Docker, register an **`http`** downstream instead — the gate supports it natively (it becomes
-an MCP client over streamable HTTP):
+That authors the policy, registers the `pii-demo` tool server, and routes the tools. `stag-proxy` picks
+the downstream up on its next poll and flips to `ready`. Then, with **no model and no API key**:
+
+```
+fetch_user_profile(123)                          ALLOW  — returns Alice's record, INCLUDING her SSN
+send_external_reply("Your SSN is 000-12-3456")   DENY   — never reaches the tool
+send_external_reply("Hi Alice, you're unlocked") DENY   — still free-form
+send_external_reply("tmpl:account_unlocked")     ALLOW  — an approved template
+```
+
+Look at the third line. A perfectly innocent message is *also* blocked — because **no free-form value
+can cross at all.** The policy does not scan for SSNs; it permits four template ids. That is why a
+jailbroken or prompt-injected model cannot defeat it: there is no clever phrasing that becomes an
+approved template id. **Containment is structural, not content-based.**
+
+## Registering your own downstream
+
+A containerized gate cannot *spawn* a `stdio` MCP server — and we would rather keep the gate distroless
+and minimal than bake an interpreter into it. So under Docker, register an **`http`** downstream; the
+gate is an MCP client over streamable HTTP natively:
 
 ```bash
 ADMIN=$(grep STAG_ADMIN_TOKEN .env | cut -d= -f2)
@@ -90,12 +109,12 @@ curl -s -H "Authorization: Bearer $ADMIN" -X POST localhost:8080/api/mcp-servers
   -d '{"name":"my-tools","transport":"http","target":"http://my-tools:9000/mcp"}'
 ```
 
-`stag-proxy` picks it up on its next poll and flips to `ready`.
+`cmd/example-pii` is a 60-line reference for what such a server looks like (it serves stdio *and*
+streamable HTTP from the same binary).
 
-**Known gap:** the k8s / pii-demo / zt-ops example servers are stdio-only today, so the *containerized*
-stack has no turnkey demo downstream yet. Run those examples with `tools/up.sh` on the host, or port an
-example server to streamable HTTP. That port is the next piece of work, and it is tracked honestly here
-rather than papered over.
+The **k8s example** (a live cluster: gated reads, prod mutations that escalate to a human) still runs
+`stdio` and needs a real cluster, so drive it on the host: `tools/up.sh` then `bash
+examples/k8s/setup.sh`.
 
 ## Operational notes
 

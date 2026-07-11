@@ -1,0 +1,57 @@
+name: Bug
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **If this is a security vulnerability, do NOT file it here.** See SECURITY.md for private
+        disclosure. When in doubt, report privately — we would rather triage a false alarm.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: "`tools/find.sh <words>` will tell you, if you are unsure."
+      options:
+        - gate — stag/ (policy, MCP proxy, audit, approvals)
+        - orchestrator — harness/ (dispatch, agent loop, models)
+        - console (frontend)
+        - docker / compose
+        - docs
+        - not sure
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: Include the verdict and audit line if a gate decision was involved.
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smaller the better. A failing test is ideal.
+      placeholder: |
+        1. tools/gen-env.sh && docker compose up -d
+        2. tools/demo.sh
+        3. curl ... -> expected DENY, got ALLOW
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+  - type: checkboxes
+    id: failclosed
+    attributes:
+      label: Did it fail OPEN?
+      description: >
+        i.e. did something ambiguous (unknown tool, missing arg, unreachable downstream, unset token)
+        result in an ALLOW rather than a DENY? If so, say so — that is the most serious class of bug in
+        this project, and it may belong in a private report instead.
+      options:
+        - label: This bug caused something to be allowed that should not have been

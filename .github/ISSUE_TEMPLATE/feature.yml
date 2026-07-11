@@ -1,0 +1,36 @@
+name: Feature
+description: Propose a capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today? Describe the situation, not the solution.
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+    validations: {required: true}
+  - type: dropdown
+    id: side
+    attributes:
+      label: Which side of the boundary does this live on?
+      description: >
+        The gate holds no model and no keys — enforced by architecture_test.go. If a feature needs the
+        gate to reach a model or a credential, it belongs in the orchestrator, or it needs a different
+        design. Say "not sure" and we will work it out.
+      options:
+        - gate — stag/ (no model, no keys)
+        - orchestrator — harness/ (holds the keys)
+        - console
+        - not sure
+    validations: {required: true}
+  - type: textarea
+    id: security
+    attributes:
+      label: Does it widen what an agent can do?
+      description: >
+        If yes, what stops a hijacked model from abusing it? "The model won't do that" is not an
+        answer here — the whole premise is that it might.

@@ -25,7 +25,8 @@ That separation is the product. It is also *enforced*, not merely intended:
 either gate binary — so much as imports orchestrator code. The gate can be trusted with your
 infrastructure precisely because it is provably incapable of reaching your keys.
 
-Everything here is open source. There is no held-back edition.
+Everything here is open source under **[Apache-2.0](LICENSE)** — patent grant included, which is what
+enterprise and public-sector legal teams will ask about first. There is no held-back edition.
 
 ## Both channels cross the gate
 
@@ -70,9 +71,23 @@ gate enforces the split. See [SECURITY.md](SECURITY.md).
 
 ```bash
 tools/gen-env.sh          # mint the four control-plane role secrets
-docker compose up -d      # five containers
+docker compose up -d      # six containers (incl. an example tool server)
+tools/demo.sh             # author the policy + wire the tools
 open http://localhost:3000
 ```
+
+**No model or API key required to see the point:**
+
+```
+fetch_user_profile(123)                          ALLOW  — returns Alice's record, INCLUDING her SSN
+send_external_reply("Your SSN is 000-12-3456")   DENY   — never reaches the tool
+send_external_reply("Hi Alice, you're unlocked") DENY   — still free-form
+send_external_reply("tmpl:account_unlocked")     ALLOW  — an approved template
+```
+
+Look at the third line. An *innocent* message is blocked too — because **no free-form value can cross
+at all.** The policy never scans for SSNs; it permits four template ids. There is no clever phrasing
+that becomes an approved template id, which is exactly why a jailbroken model cannot get around it.
 
 Or run it on the host:
 
@@ -125,9 +140,12 @@ planning/      every design decision, including the ones we got wrong
 ## Development
 
 ```bash
-tools/check.sh      # gofmt · vet · test · ARCHITECTURE · typecheck · repo hygiene
-tools/hygiene.sh    # repo invariants that fail silently if nobody looks
+tools/find.sh escalation approval   # find the code that does a thing (keyword index, not grep)
+tools/check.sh                      # gofmt · vet · test · ARCHITECTURE · typecheck · index · hygiene
+tools/sbom.sh                       # SBOM of the shipped images + a copyleft gate
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md).
 
 `tools/hygiene.sh` exists because both bugs it catches actually happened here: a `.gitignore` pattern
 that silently swallowed 19 source files (the build kept working — only a fresh clone was broken), and a
@@ -141,4 +159,6 @@ Neither announces itself. Run it in CI.
 - [docs/mcp-gating-proxy.md](docs/mcp-gating-proxy.md) — how the gate speaks MCP.
 - [docs/docker.md](docs/docker.md) — containers, and why the secrets are split across them.
 - [docs/development.md](docs/development.md) — the dev tools and the one architectural rule.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to work on this (and the one rule that is not negotiable).
+- [INDEX.md](INDEX.md) — a generated map of every component and what it is for.
 - [planning/](planning/) — the full design record.

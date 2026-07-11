@@ -1,0 +1,2991 @@
+{
+  "files": [
+    {
+      "doc": "Command example-pii is the pii-demo downstream MCP server \u2014 the containment story, in one binary.  fetch_user_profile(user_id)              INTERNAL read. Returns a profile that INCLUDES an SSN. send_external_reply(ticke",
+      "keywords": [
+        "example",
+        "downstream",
+        "pii",
+        "containment",
+        "mcp",
+        "server",
+        "stdio",
+        "streamable-http",
+        "egress",
+        "structural-not-scanning"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/example-pii/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command harness is the minimal orchestrator: it connects to a model (Claude) and routes the model's proposed tool calls through the stag-proxy MCP server, which gates each one. The model is the untrusted proposer; stag d",
+      "keywords": [
+        "cmd",
+        "orchestrator",
+        "cli",
+        "minimal",
+        "agent",
+        "loop",
+        "proposer",
+        "gated",
+        "stdio",
+        "seed"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/harness/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "dispatch",
+        "ingress",
+        "event->recipe->session->agent",
+        "turnkey",
+        "governed-agent",
+        "sse",
+        "stream"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/harness-serve/dispatch.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command harness-serve is the ORCHESTRATOR's API: connect models, author the event map, and dispatch an event through the gate to a governed agent. It runs the agent tool-use loop and streams the transcript (model proposa",
+      "keywords": [
+        "cmd",
+        "orchestrator",
+        "api",
+        "models",
+        "keys",
+        "dispatch",
+        "event-map",
+        "sse",
+        "operator-role",
+        "never-approve",
+        "cors"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/harness-serve/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command healthcheck is a container liveness probe: GET a URL, exit 0 on 2xx, 1 otherwise.  It exists because the service images are DISTROLESS \u2014 no shell, no curl, no wget, nothing to pivot to if a binary is ever popped.",
+      "keywords": [
+        "container",
+        "liveness",
+        "probe",
+        "static",
+        "distroless",
+        "no-shell",
+        "exit-code"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/healthcheck/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command kbserve is the downstream context provider for the k8s demo (Planning/30). It embeds a markdown KB once (via ollama) and answers GET /context?q=<query> with the top-k relevant facts as plain text. stag's `http` c",
+      "keywords": [
+        "cmd",
+        "context-provider",
+        "read-channel",
+        "kb",
+        "embed",
+        "ollama",
+        "downstream",
+        "gate-stays-model-free"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/kbserve/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command stag-proxy is the standing gating MCP server \u2014 the front door an agent host connects to (Planning/24). It is an MCP SERVER to the agent and an MCP CLIENT to the real downstream server, with the deterministic gate",
+      "keywords": [
+        "cmd",
+        "gate",
+        "mcp",
+        "gating",
+        "proxy",
+        "daemon",
+        "session-to-recipe",
+        "stdio",
+        "streamable-http",
+        "live-vs-ready",
+        "fail-closed",
+        "dispatch-role"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stag-proxy/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command stag-serve runs the HTTP API over the gating proxy (Planning/16) \u2014 the backend the Next.js console talks to. It loads a policy recipe, builds a proxy.Gate that records cleared crossings to a hash-chained egress l",
+      "keywords": [
+        "cmd",
+        "stag-serve",
+        "http",
+        "api",
+        "console",
+        "backend",
+        "gating",
+        "proxy",
+        "decide",
+        "log"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stag-serve/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package agent is the orchestrator's tool-use loop: a model proposes tool calls, each is routed THROUGH stag-proxy (which gates it), and results feed back. The model is the untrusted proposer; stag decides what is allowed",
+      "keywords": [
+        "agent",
+        "loop",
+        "tool-use",
+        "propose",
+        "gate",
+        "verdict",
+        "forward",
+        "transcript",
+        "sse",
+        "max-turns",
+        "untrusted-proposer"
+      ],
+      "layer": "orchestrator",
+      "package": "agent",
+      "path": "stoa-kernel/harness/agent/agent.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "approval",
+        "poll",
+        "escalation",
+        "signed-release",
+        "retry",
+        "dispatch-role",
+        "poll-only",
+        "never-approve",
+        "human-in-the-loop"
+      ],
+      "layer": "orchestrator",
+      "package": "agent",
+      "path": "stoa-kernel/harness/agent/approval.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "adapter",
+        "claude",
+        "anthropic",
+        "tool-use",
+        "proposer",
+        "translate",
+        "mcp-tools-to-provider-schema"
+      ],
+      "layer": "orchestrator",
+      "package": "agent",
+      "path": "stoa-kernel/harness/agent/claude.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "adapter",
+        "openai-compatible",
+        "tool-use",
+        "proposer",
+        "translate",
+        "mcp-tools-to-provider-schema",
+        "base-url"
+      ],
+      "layer": "orchestrator",
+      "package": "agent",
+      "path": "stoa-kernel/harness/agent/openai.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package bind is the context assembly: the one place the model boundary's trust discipline is enforced. The trusted instruction becomes the System; the untrusted event and retrieved docs become the Input, labeled as data.",
+      "keywords": [
+        "bind",
+        "context",
+        "assembly",
+        "trust-position",
+        "system",
+        "instruction",
+        "input",
+        "untrusted",
+        "data",
+        "pip",
+        "rag",
+        "boundary"
+      ],
+      "layer": "orchestrator",
+      "package": "bind",
+      "path": "stoa-kernel/harness/bind/bind.go",
+      "symbols": [
+        {
+          "kw": [
+            "assemble",
+            "request",
+            "trusted",
+            "instruction",
+            "untrusted",
+            "event",
+            "docs"
+          ],
+          "line": 24,
+          "name": "Assemble"
+        }
+      ]
+    },
+    {
+      "doc": "Package dispatch routes an EVENT to a RECIPE, then (slice 2) binds a session and runs the agent loop against it. It is the orchestration analog of stag's own gate \u2014 and a port of Ratchet's dispatcher (internal/dispatch):",
+      "keywords": [
+        "dispatch",
+        "event",
+        "recipe",
+        "route",
+        "propose",
+        "gate",
+        "deterministic-first",
+        "model-fallback",
+        "misroute-cant-breach"
+      ],
+      "layer": "orchestrator",
+      "package": "dispatch",
+      "path": "stoa-kernel/harness/dispatch/dispatch.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "event",
+        "map",
+        "definition",
+        "predicate",
+        "dotted-path",
+        "match",
+        "user-authored",
+        "deterministic",
+        "domain-specific"
+      ],
+      "layer": "orchestrator",
+      "package": "dispatch",
+      "path": "stoa-kernel/harness/dispatch/eventmap.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "dispatch",
+        "model",
+        "role",
+        "router",
+        "openai",
+        "constrained-json",
+        "propose",
+        "recipe-id",
+        "confidence",
+        "enum"
+      ],
+      "layer": "orchestrator",
+      "package": "dispatch",
+      "path": "stoa-kernel/harness/dispatch/modelrouter.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "wiring",
+        "stag-serve",
+        "catalog",
+        "routes-for-recipe",
+        "session",
+        "binder",
+        "daemon",
+        "post-sessions",
+        "token"
+      ],
+      "layer": "orchestrator",
+      "package": "dispatch",
+      "path": "stoa-kernel/harness/dispatch/wiring.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package kb is the embedding knowledge base: basic RAG retrieval over markdown runbooks. It embeds docs + a query and returns the top-k by cosine similarity. A pure retrieval utility \u2014 it makes no trust or gate decision; ",
+      "keywords": [
+        "kb",
+        "rag",
+        "embedding",
+        "retrieval",
+        "cosine",
+        "topk",
+        "markdown",
+        "chunk",
+        "ollama",
+        "untrusted",
+        "enrichment",
+        "fail-closed"
+      ],
+      "layer": "orchestrator",
+      "package": "kb",
+      "path": "stoa-kernel/harness/kb/kb.go",
+      "symbols": [
+        {
+          "kw": [
+            "embedder",
+            "embed",
+            "text",
+            "to",
+            "vector"
+          ],
+          "line": 25,
+          "name": "Embedder"
+        },
+        {
+          "kw": [
+            "ollama",
+            "embedder",
+            "endpoint",
+            "model",
+            "key"
+          ],
+          "line": 30,
+          "name": "OllamaEmbedder"
+        },
+        {
+          "kw": [
+            "embed",
+            "call",
+            "embeddings",
+            "api",
+            "fail-closed"
+          ],
+          "line": 38,
+          "name": "Embed"
+        },
+        {
+          "kw": [
+            "doc",
+            "id",
+            "source",
+            "text",
+            "vec",
+            "score"
+          ],
+          "line": 86,
+          "name": "Doc"
+        },
+        {
+          "kw": [
+            "mem",
+            "store",
+            "embedder",
+            "docs"
+          ],
+          "line": 95,
+          "name": "MemStore"
+        },
+        {
+          "kw": [
+            "new",
+            "store",
+            "pre-embedded",
+            "docs"
+          ],
+          "line": 101,
+          "name": "NewStore"
+        },
+        {
+          "kw": [
+            "load",
+            "dir",
+            "markdown",
+            "chunk",
+            "embed",
+            "fail-closed"
+          ],
+          "line": 106,
+          "name": "LoadDir"
+        },
+        {
+          "kw": [
+            "retrieve",
+            "embed",
+            "query",
+            "cosine",
+            "topk",
+            "fail-closed"
+          ],
+          "line": 138,
+          "name": "Retrieve"
+        },
+        {
+          "kw": [
+            "chunk",
+            "markdown",
+            "by",
+            "section"
+          ],
+          "line": 164,
+          "name": "Chunk"
+        },
+        {
+          "kw": [
+            "cosine",
+            "similarity",
+            "bounded",
+            "no-nan"
+          ],
+          "line": 193,
+          "name": "Cosine"
+        }
+      ]
+    },
+    {
+      "doc": "Package claude is the Claude proposer adapter: a model.Proposer that calls the Anthropic Messages API and returns the completion as an untrusted proposal. The anthropic SDK dependency is quarantined here.",
+      "keywords": [
+        "claude",
+        "proposer",
+        "adapter",
+        "anthropic",
+        "messages",
+        "api",
+        "untrusted",
+        "transport",
+        "quarantine",
+        "fail-closed"
+      ],
+      "layer": "orchestrator",
+      "package": "claude",
+      "path": "stoa-kernel/harness/model/claude/claude.go",
+      "symbols": [
+        {
+          "kw": [
+            "claude",
+            "proposer",
+            "strategy",
+            "model",
+            "maxtokens",
+            "client"
+          ],
+          "line": 24,
+          "name": "Claude"
+        },
+        {
+          "kw": [
+            "new",
+            "claude",
+            "inject",
+            "options",
+            "client"
+          ],
+          "line": 31,
+          "name": "New"
+        },
+        {
+          "kw": [
+            "propose",
+            "call",
+            "messages",
+            "api",
+            "untrusted",
+            "fail-closed",
+            "no",
+            "temperature"
+          ],
+          "line": 36,
+          "name": "Propose"
+        }
+      ]
+    },
+    {
+      "doc": "Package model is the proposer boundary: the untrusted agent side. A strategy seam that produces the proposal the kernel gates, conferring zero trust - a Proposal has nowhere to put trust, and Decide's verdict depends onl",
+      "keywords": [
+        "proposer",
+        "strategy",
+        "adapter",
+        "untrusted",
+        "proposal",
+        "decide",
+        "zero-trust",
+        "provenance",
+        "fail-closed"
+      ],
+      "layer": "orchestrator",
+      "package": "model",
+      "path": "stoa-kernel/harness/model/model.go",
+      "symbols": [
+        {
+          "kw": [
+            "request",
+            "bound",
+            "context",
+            "proposer",
+            "reasons",
+            "over",
+            "as",
+            "data"
+          ],
+          "line": 17,
+          "name": "Request"
+        },
+        {
+          "kw": [
+            "proposal",
+            "trust-free",
+            "value",
+            "provenance",
+            "never",
+            "authorizes"
+          ],
+          "line": 24,
+          "name": "Proposal"
+        },
+        {
+          "kw": [
+            "proposer",
+            "strategy",
+            "bring",
+            "your",
+            "agent"
+          ],
+          "line": 30,
+          "name": "Proposer"
+        },
+        {
+          "kw": [
+            "localstub",
+            "deterministic",
+            "offline",
+            "proposer"
+          ],
+          "line": 35,
+          "name": "LocalStub"
+        },
+        {
+          "kw": [
+            "localstub",
+            "propose",
+            "deterministic",
+            "fail",
+            "path"
+          ],
+          "line": 43,
+          "name": "Propose"
+        },
+        {
+          "kw": [
+            "decision",
+            "proposal",
+            "result"
+          ],
+          "line": 55,
+          "name": "Decision"
+        },
+        {
+          "kw": [
+            "decide",
+            "compose",
+            "proposer",
+            "gate",
+            "pure",
+            "pass-through",
+            "fail-closed"
+          ],
+          "line": 61,
+          "name": "Decide"
+        }
+      ]
+    },
+    {
+      "doc": "Package openai is the OpenAI-compatible proposer adapter: a model.Proposer that calls a /v1/chat/completions endpoint and returns the completion as an untrusted proposal. One adapter covers ollama, vllm, OpenRouter, and ",
+      "keywords": [
+        "openai",
+        "compatible",
+        "proposer",
+        "adapter",
+        "chat",
+        "completions",
+        "untrusted",
+        "ollama",
+        "openrouter",
+        "vllm",
+        "fail-closed"
+      ],
+      "layer": "orchestrator",
+      "package": "openai",
+      "path": "stoa-kernel/harness/model/openai/openai.go",
+      "symbols": [
+        {
+          "kw": [
+            "client",
+            "base",
+            "url",
+            "key",
+            "model",
+            "maxtokens",
+            "http"
+          ],
+          "line": 25,
+          "name": "Client"
+        },
+        {
+          "kw": [
+            "chat",
+            "message",
+            "role",
+            "content"
+          ],
+          "line": 34,
+          "name": "chatMessage"
+        },
+        {
+          "kw": [
+            "chat",
+            "request",
+            "model",
+            "max_tokens",
+            "messages",
+            "no",
+            "sampling",
+            "params"
+          ],
+          "line": 40,
+          "name": "chatRequest"
+        },
+        {
+          "kw": [
+            "chat",
+            "response",
+            "served",
+            "model",
+            "choices",
+            "finish_reason",
+            "error"
+          ],
+          "line": 47,
+          "name": "chatResponse"
+        },
+        {
+          "kw": [
+            "propose",
+            "chat",
+            "completions",
+            "untrusted",
+            "fail-closed",
+            "no",
+            "temperature"
+          ],
+          "line": 61,
+          "name": "Propose"
+        }
+      ]
+    },
+    {
+      "doc": "Package store is the event_harness's own model-provider config: which models the orchestrator can drive, and where their keys live. This is the config that was removed from stag (the gate holds no keys) \u2014 it belongs HERE",
+      "keywords": [
+        "orchestrator",
+        "store",
+        "models",
+        "api-keys",
+        "json",
+        "file",
+        "key-env",
+        "never-echoed",
+        "keys-live-here"
+      ],
+      "layer": "orchestrator",
+      "package": "store",
+      "path": "stoa-kernel/harness/store/store.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package auth is the control-plane authentication for stag (Planning/31): bearer tokens with ROLES.  The load-bearing rule this package exists to enforce: the `dispatch` role (the ORCHESTRATOR \u2014 a machine) may bind sessio",
+      "keywords": [
+        "control-plane",
+        "auth",
+        "bearer",
+        "roles",
+        "constant-time",
+        "fail-closed",
+        "tokens",
+        "dispatch",
+        "cannot",
+        "approve"
+      ],
+      "layer": "gate",
+      "package": "auth",
+      "path": "stoa-kernel/stag/auth/auth.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14): a hash-chained, tamper-evident JSONL event log behind the broker.EventSink seam, with NO keys and NO PKI. Each ReleaseEvent becomes one new",
+      "keywords": [
+        "egress",
+        "jsonl",
+        "hash-chain",
+        "tamper-evident",
+        "event",
+        "log",
+        "verify",
+        "leaf",
+        "prev-hash",
+        "head",
+        "no-pki",
+        "eventsink"
+      ],
+      "layer": "gate",
+      "package": "egress",
+      "path": "stoa-kernel/stag/egress/egress.go",
+      "symbols": [
+        {
+          "kw": [
+            "leaf",
+            "seq",
+            "prev-hash",
+            "event",
+            "chain-hash"
+          ],
+          "line": 31,
+          "name": "Leaf"
+        },
+        {
+          "kw": [
+            "verify",
+            "result",
+            "head",
+            "count"
+          ],
+          "line": 39,
+          "name": "VerifyResult"
+        },
+        {
+          "kw": [
+            "jsonl",
+            "sink",
+            "writer",
+            "seq",
+            "head",
+            "chained",
+            "append-only",
+            "concurrent"
+          ],
+          "line": 45,
+          "name": "JSONLSink"
+        },
+        {
+          "kw": [
+            "new",
+            "jsonl",
+            "sink",
+            "fresh",
+            "genesis"
+          ],
+          "line": 53,
+          "name": "NewJSONLSink"
+        },
+        {
+          "kw": [
+            "resume",
+            "jsonl",
+            "sink",
+            "continue",
+            "existing",
+            "chain",
+            "head",
+            "seq"
+          ],
+          "line": 58,
+          "name": "ResumeJSONLSink"
+        },
+        {
+          "kw": [
+            "record",
+            "append",
+            "chained",
+            "leaf",
+            "fail-closed",
+            "no-advance-on-error"
+          ],
+          "line": 63,
+          "name": "Record"
+        },
+        {
+          "kw": [
+            "head",
+            "last",
+            "leaf",
+            "hash"
+          ],
+          "line": 104,
+          "name": "Head"
+        },
+        {
+          "kw": [
+            "count",
+            "leaves",
+            "written"
+          ],
+          "line": 111,
+          "name": "Count"
+        },
+        {
+          "kw": [
+            "leaf",
+            "hash",
+            "canonical",
+            "seq",
+            "prev",
+            "event-hash"
+          ],
+          "line": 118,
+          "name": "leafHash"
+        },
+        {
+          "kw": [
+            "verify",
+            "chain",
+            "integrity",
+            "head",
+            "count",
+            "tamper-evident",
+            "recompute"
+          ],
+          "line": 127,
+          "name": "Verify"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "signed",
+        "checkpoint",
+        "ed25519",
+        "head",
+        "seal",
+        "authenticated",
+        "offline-verifiable",
+        "rung2",
+        "no-pki",
+        "keyid"
+      ],
+      "layer": "gate",
+      "package": "egress",
+      "path": "stoa-kernel/stag/egress/sign.go",
+      "symbols": [
+        {
+          "kw": [
+            "checkpoint",
+            "origin",
+            "count",
+            "head",
+            "statement",
+            "about",
+            "the",
+            "chain",
+            "head"
+          ],
+          "line": 22,
+          "name": "Checkpoint"
+        },
+        {
+          "kw": [
+            "signed",
+            "checkpoint",
+            "keyid",
+            "base64",
+            "ed25519",
+            "sig"
+          ],
+          "line": 29,
+          "name": "SignedCheckpoint"
+        },
+        {
+          "kw": [
+            "generate",
+            "ed25519",
+            "keypair"
+          ],
+          "line": 44,
+          "name": "GenerateKey"
+        },
+        {
+          "kw": [
+            "key",
+            "id",
+            "short",
+            "fingerprint",
+            "of",
+            "public",
+            "key"
+          ],
+          "line": 49,
+          "name": "KeyID"
+        },
+        {
+          "kw": [
+            "sign",
+            "checkpoint",
+            "ed25519",
+            "deterministic",
+            "domain-separated"
+          ],
+          "line": 55,
+          "name": "Sign"
+        },
+        {
+          "kw": [
+            "verify",
+            "signed",
+            "checkpoint",
+            "chain",
+            "+",
+            "head",
+            "match",
+            "+",
+            "keyid",
+            "+",
+            "signature",
+            "fail-closed"
+          ],
+          "line": 66,
+          "name": "VerifySigned"
+        },
+        {
+          "kw": [
+            "marshal",
+            "private",
+            "key",
+            "base64",
+            "seed"
+          ],
+          "line": 123,
+          "name": "MarshalPrivate"
+        },
+        {
+          "kw": [
+            "parse",
+            "private",
+            "key",
+            "fail-closed",
+            "length"
+          ],
+          "line": 128,
+          "name": "ParsePrivate"
+        },
+        {
+          "kw": [
+            "marshal",
+            "public",
+            "key",
+            "base64"
+          ],
+          "line": 137,
+          "name": "MarshalPublic"
+        },
+        {
+          "kw": [
+            "parse",
+            "public",
+            "key",
+            "fail-closed",
+            "length"
+          ],
+          "line": 142,
+          "name": "ParsePublic"
+        },
+        {
+          "kw": [
+            "encode",
+            "key",
+            "base64",
+            "line"
+          ],
+          "line": 151,
+          "name": "encodeKey"
+        },
+        {
+          "kw": [
+            "decode",
+            "key",
+            "base64",
+            "length-check",
+            "fail-closed"
+          ],
+          "line": 156,
+          "name": "decodeKey"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "sink",
+        "gate",
+        "abac",
+        "decision",
+        "authoritative",
+        "benign",
+        "release",
+        "fail-safe",
+        "mediation"
+      ],
+      "layer": "gate",
+      "package": "gate",
+      "path": "stoa-kernel/stag/internal/gate/sinkgate.go",
+      "symbols": [
+        {
+          "kw": [
+            "sink",
+            "sensitivity",
+            "authoritative",
+            "benign"
+          ],
+          "line": 12,
+          "name": "SinkSensitivity"
+        },
+        {
+          "kw": [
+            "sink",
+            "sensitivity",
+            "string"
+          ],
+          "line": 21,
+          "name": "String"
+        },
+        {
+          "kw": [
+            "parse",
+            "sink",
+            "sensitivity"
+          ],
+          "line": 33,
+          "name": "ParseSinkSensitivity"
+        },
+        {
+          "kw": [
+            "gate",
+            "sink",
+            "abac",
+            "decision",
+            "verdict"
+          ],
+          "line": 45,
+          "name": "GateSink"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "verdict",
+        "decision",
+        "rollup",
+        "conjunction",
+        "disjunction",
+        "negation",
+        "gate",
+        "fail-safe"
+      ],
+      "layer": "gate",
+      "package": "gate",
+      "path": "stoa-kernel/stag/internal/gate/verdict.go",
+      "symbols": [
+        {
+          "kw": [
+            "verdict",
+            "type",
+            "gate",
+            "decision",
+            "rollup"
+          ],
+          "line": 8,
+          "name": "Verdict"
+        },
+        {
+          "kw": [
+            "verdict",
+            "string"
+          ],
+          "line": 18,
+          "name": "String"
+        },
+        {
+          "kw": [
+            "parse",
+            "verdict"
+          ],
+          "line": 32,
+          "name": "ParseVerdict"
+        },
+        {
+          "kw": [
+            "verdict",
+            "and",
+            "conjunction",
+            "max",
+            "restrictive"
+          ],
+          "line": 46,
+          "name": "And"
+        },
+        {
+          "kw": [
+            "verdict",
+            "or",
+            "disjunction",
+            "min",
+            "restrictive"
+          ],
+          "line": 54,
+          "name": "Or"
+        },
+        {
+          "kw": [
+            "verdict",
+            "negate",
+            "involution"
+          ],
+          "line": 62,
+          "name": "Negate"
+        },
+        {
+          "kw": [
+            "verdict",
+            "andall",
+            "fold",
+            "identity",
+            "allow"
+          ],
+          "line": 74,
+          "name": "AndAll"
+        },
+        {
+          "kw": [
+            "verdict",
+            "orall",
+            "fold",
+            "identity",
+            "deny"
+          ],
+          "line": 83,
+          "name": "OrAll"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "canonical",
+        "hash",
+        "sha256",
+        "deterministic",
+        "json",
+        "sorted",
+        "keys",
+        "stable",
+        "sensitive",
+        "attestation"
+      ],
+      "layer": "gate",
+      "package": "record",
+      "path": "stoa-kernel/stag/internal/record/canonicalhash.go",
+      "symbols": [
+        {
+          "kw": [
+            "canonical",
+            "json",
+            "sorted",
+            "keys"
+          ],
+          "line": 12,
+          "name": "CanonicalJSON"
+        },
+        {
+          "kw": [
+            "canonical",
+            "hash",
+            "sha256",
+            "hex"
+          ],
+          "line": 17,
+          "name": "CanonicalHash"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "release",
+        "event",
+        "trust",
+        "crossing",
+        "record",
+        "hashed",
+        "attestation",
+        "four",
+        "dimensions",
+        "tamper-evident"
+      ],
+      "layer": "gate",
+      "package": "record",
+      "path": "stoa-kernel/stag/internal/record/releaseevent.go",
+      "symbols": [
+        {
+          "kw": [
+            "release",
+            "event",
+            "trust",
+            "crossing",
+            "record"
+          ],
+          "line": 8,
+          "name": "ReleaseEvent"
+        },
+        {
+          "kw": [
+            "release",
+            "event",
+            "canonical",
+            "hash",
+            "tamper-evident"
+          ],
+          "line": 21,
+          "name": "Hash"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "release",
+        "rule",
+        "declassifier",
+        "closed",
+        "set",
+        "membership",
+        "signed",
+        "equality",
+        "numeric",
+        "range",
+        "laundering"
+      ],
+      "layer": "gate",
+      "package": "release",
+      "path": "stoa-kernel/stag/internal/release/releaserule.go",
+      "symbols": [
+        {
+          "kw": [
+            "release",
+            "rule",
+            "kind",
+            "set_membership",
+            "signed_equality",
+            "numeric_range"
+          ],
+          "line": 11,
+          "name": "RuleKind"
+        },
+        {
+          "kw": [
+            "rule",
+            "kind",
+            "string"
+          ],
+          "line": 21,
+          "name": "String"
+        },
+        {
+          "kw": [
+            "parse",
+            "rule",
+            "kind",
+            "fail-closed",
+            "inverse",
+            "of",
+            "string"
+          ],
+          "line": 35,
+          "name": "ParseRuleKind"
+        },
+        {
+          "kw": [
+            "release",
+            "rule",
+            "closed",
+            "predicate"
+          ],
+          "line": 49,
+          "name": "ReleaseRule"
+        },
+        {
+          "kw": [
+            "release",
+            "predicate",
+            "exact",
+            "membership",
+            "bounds"
+          ],
+          "line": 58,
+          "name": "Release"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "trust",
+        "lattice",
+        "information",
+        "flow",
+        "semilattice"
+      ],
+      "layer": "gate",
+      "package": "trust",
+      "path": "stoa-kernel/stag/internal/trust/trust.go",
+      "symbols": [
+        {
+          "kw": [
+            "represent",
+            "trust",
+            "levels"
+          ],
+          "line": 8,
+          "name": "TrustClass"
+        },
+        {
+          "kw": [
+            "convert",
+            "trust",
+            "class",
+            "to",
+            "string"
+          ],
+          "line": 18,
+          "name": "String"
+        },
+        {
+          "kw": [
+            "parse",
+            "string",
+            "to",
+            "trust",
+            "class"
+          ],
+          "line": 32,
+          "name": "ParseTrustClass"
+        },
+        {
+          "kw": [
+            "join",
+            "two",
+            "trust",
+            "classes"
+          ],
+          "line": 46,
+          "name": "Join"
+        },
+        {
+          "kw": [
+            "join",
+            "multiple",
+            "trust",
+            "classes"
+          ],
+          "line": 54,
+          "name": "JoinAll"
+        }
+      ]
+    },
+    {
+      "doc": "Package notify is the OPTIONAL push side of the human-approval loop (Stage 5): a fire-and-forget webhook that POSTs a pending-approval notice to an external system (Slack/PagerDuty/an existing change-approval flow) when ",
+      "keywords": [
+        "webhook",
+        "approval",
+        "escalate",
+        "push",
+        "best-effort",
+        "async",
+        "non-blocking",
+        "notification",
+        "stage5"
+      ],
+      "layer": "gate",
+      "package": "notify",
+      "path": "stoa-kernel/stag/notify/notify.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package provider is the READ channel of the dual proxy (Planning/17/18): context providers behind one interface, with the load-bearing guarantee that ALL context is stamped untrusted at origin, unbypassably. A provider y",
+      "keywords": [
+        "context",
+        "provider",
+        "read",
+        "channel",
+        "untrusted",
+        "gather",
+        "label-at-origin",
+        "fail-open",
+        "http",
+        "adapter"
+      ],
+      "layer": "gate",
+      "package": "provider",
+      "path": "stoa-kernel/stag/provider/provider.go",
+      "symbols": [
+        {
+          "kw": [
+            "read",
+            "event",
+            "audit",
+            "provider",
+            "query",
+            "items",
+            "sources",
+            "read-channel",
+            "crossing"
+          ],
+          "line": 29,
+          "name": "ReadEvent"
+        },
+        {
+          "kw": [
+            "context",
+            "item",
+            "source",
+            "text",
+            "trust",
+            "score"
+          ],
+          "line": 38,
+          "name": "ContextItem"
+        },
+        {
+          "kw": [
+            "context",
+            "provider",
+            "name",
+            "provide",
+            "query",
+            "items"
+          ],
+          "line": 46,
+          "name": "ContextProvider"
+        },
+        {
+          "kw": [
+            "provider",
+            "error",
+            "name",
+            "reason"
+          ],
+          "line": 52,
+          "name": "ProviderError"
+        },
+        {
+          "kw": [
+            "gather",
+            "run",
+            "providers",
+            "stamp",
+            "untrusted",
+            "fail-open",
+            "per-provider"
+          ],
+          "line": 58,
+          "name": "Gather"
+        },
+        {
+          "kw": [
+            "http",
+            "provider",
+            "name",
+            "url",
+            "client",
+            "fetch",
+            "body",
+            "untrusted"
+          ],
+          "line": 82,
+          "name": "HTTP"
+        },
+        {
+          "kw": [
+            "http",
+            "name"
+          ],
+          "line": 89,
+          "name": "Name"
+        },
+        {
+          "kw": [
+            "http",
+            "provide",
+            "get",
+            "url",
+            "query",
+            "param",
+            "body",
+            "one",
+            "item",
+            "data"
+          ],
+          "line": 92,
+          "name": "Provide"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "mcp",
+        "discover",
+        "admin",
+        "client",
+        "tools-list",
+        "downstream",
+        "stdio",
+        "http",
+        "transport",
+        "quarantined"
+      ],
+      "layer": "gate",
+      "package": "mcpgate",
+      "path": "stoa-kernel/stag/proxy/mcpgate/discover.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17, Slice 0). It wires Model Context Protocol server/client handling to the transport-agnostic proxy.Gate: stag is an MCP SERVER to the agent ",
+      "keywords": [
+        "mcp",
+        "adapter",
+        "gating",
+        "proxy",
+        "server",
+        "client",
+        "forward-iff-cleared",
+        "quarantined",
+        "tool",
+        "boundary"
+      ],
+      "layer": "gate",
+      "package": "mcpgate",
+      "path": "stoa-kernel/stag/proxy/mcpgate/mcpgate.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agnostic decision at the tool boundary, with NO MCP dependency. An external agent proposes a tool call; the Gate routes it to a recipe, runs th",
+      "keywords": [
+        "gating",
+        "proxy",
+        "tool",
+        "boundary",
+        "route",
+        "recipe",
+        "eval",
+        "forward-iff-cleared",
+        "fail-closed",
+        "no-model",
+        "mcp"
+      ],
+      "layer": "gate",
+      "package": "proxy",
+      "path": "stoa-kernel/stag/proxy/proxy.go",
+      "symbols": [
+        {
+          "kw": [
+            "tool",
+            "call",
+            "name",
+            "args",
+            "from",
+            "the",
+            "untrusted",
+            "agent"
+          ],
+          "line": 35,
+          "name": "ToolCall"
+        },
+        {
+          "kw": [
+            "route",
+            "recipe",
+            "hash",
+            "gated-arg",
+            "for",
+            "a",
+            "tool"
+          ],
+          "line": 41,
+          "name": "Route"
+        },
+        {
+          "kw": [
+            "router",
+            "tool",
+            "name",
+            "to",
+            "route"
+          ],
+          "line": 73,
+          "name": "Router"
+        },
+        {
+          "kw": [
+            "sink",
+            "egress",
+            "record",
+            "release",
+            "event",
+            "(egress.JSONLSink",
+            "/",
+            "broker.MemSink",
+            "satisfy",
+            "this)"
+          ],
+          "line": 76,
+          "name": "Sink"
+        },
+        {
+          "kw": [
+            "decision",
+            "tool",
+            "verdict",
+            "forward",
+            "value",
+            "events",
+            "fault",
+            "approval-id"
+          ],
+          "line": 81,
+          "name": "Decision"
+        },
+        {
+          "kw": [
+            "gate",
+            "routes",
+            "sink",
+            "deterministic",
+            "tool-boundary",
+            "approvals",
+            "notify"
+          ],
+          "line": 92,
+          "name": "Gate"
+        },
+        {
+          "kw": [
+            "decide",
+            "route",
+            "eval",
+            "forward-iff-cleared",
+            "record",
+            "fail-closed",
+            "approval-loop"
+          ],
+          "line": 100,
+          "name": "Decide"
+        }
+      ]
+    },
+    {
+      "doc": "Package sessiond is the stag-proxy v2 daemon surface: a standing HTTP server where each MCP session is bound to a dispatcher-chosen recipe (Planning/24 v2, /25). The TRUSTED dispatcher POSTs /sessions to bind a session t",
+      "keywords": [
+        "session",
+        "daemon",
+        "registry",
+        "token",
+        "router",
+        "session-to-recipe",
+        "streamable-http",
+        "bind",
+        "fail-closed",
+        "no-fork"
+      ],
+      "layer": "gate",
+      "package": "sessiond",
+      "path": "stoa-kernel/stag/proxy/sessiond/sessiond.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package recipe is the recipe boundary: the only door through which authored YAML becomes a stag.Recipe. Parse -> validate -> lint -> canonicalize -> compile, fail closed; a rejected file is never hashed or compiled.",
+      "keywords": [
+        "recipe",
+        "parse",
+        "lint",
+        "canonicalize",
+        "compile",
+        "boundary",
+        "yaml",
+        "fail-closed",
+        "two",
+        "hashes",
+        "guarded",
+        "segment"
+      ],
+      "layer": "gate",
+      "package": "recipe",
+      "path": "stoa-kernel/stag/recipe/recipe.go",
+      "symbols": [
+        {
+          "kw": [
+            "recipe",
+            "header",
+            "name",
+            "version"
+          ],
+          "line": 25,
+          "name": "Header"
+        },
+        {
+          "kw": [
+            "parsed",
+            "recipe",
+            "compiled",
+            "registry",
+            "two",
+            "hashes"
+          ],
+          "line": 31,
+          "name": "Parsed"
+        },
+        {
+          "kw": [
+            "parse",
+            "strict",
+            "sign-time",
+            "warnings",
+            "are",
+            "errors"
+          ],
+          "line": 47,
+          "name": "Parse"
+        },
+        {
+          "kw": [
+            "parse",
+            "draft",
+            "warnings",
+            "returned"
+          ],
+          "line": 59,
+          "name": "ParseDraft"
+        },
+        {
+          "kw": [
+            "line-anchored",
+            "error"
+          ],
+          "line": 80,
+          "name": "errf"
+        },
+        {
+          "kw": [
+            "name",
+            "grammar",
+            "ascii",
+            "closed"
+          ],
+          "line": 88,
+          "name": "nameOK"
+        },
+        {
+          "kw": [
+            "rule",
+            "id",
+            "grammar",
+            "dotted",
+            "segments"
+          ],
+          "line": 102,
+          "name": "ruleIdOK"
+        },
+        {
+          "kw": [
+            "raw",
+            "step",
+            "intermediate"
+          ],
+          "line": 119,
+          "name": "rawCase"
+        },
+        {
+          "kw": [
+            "resolver",
+            "composition",
+            "sub-recipe",
+            "source",
+            "by",
+            "name"
+          ],
+          "line": 145,
+          "name": "Resolver"
+        },
+        {
+          "kw": [
+            "front-parse",
+            "prelims",
+            "decode",
+            "hygiene",
+            "schema",
+            "(no",
+            "cross-step",
+            "lint",
+            "\u2014",
+            "finish",
+            "does",
+            "that)"
+          ],
+          "line": 323,
+          "name": "frontParse"
+        },
+        {
+          "kw": [
+            "hygiene",
+            "walk",
+            "iterative",
+            "caps",
+            "anchors",
+            "aliases",
+            "merge",
+            "duplicate",
+            "keys",
+            "teaching"
+          ],
+          "line": 586,
+          "name": "hygiene"
+        },
+        {
+          "kw": [
+            "scalar",
+            "string",
+            "raw",
+            "text",
+            "tag",
+            "allowlist",
+            "templating"
+          ],
+          "line": 661,
+          "name": "strVal"
+        },
+        {
+          "kw": [
+            "scalar",
+            "quoted",
+            "required",
+            "byte-exact"
+          ],
+          "line": 680,
+          "name": "quotedStr"
+        },
+        {
+          "kw": [
+            "scalar",
+            "canonical",
+            "integer",
+            "kernel",
+            "predicate"
+          ],
+          "line": 692,
+          "name": "intVal"
+        },
+        {
+          "kw": [
+            "ingredient",
+            "origin",
+            "trust",
+            "closed",
+            "keys",
+            "value",
+            "unauthorable"
+          ],
+          "line": 704,
+          "name": "parseIngredient"
+        },
+        {
+          "kw": [
+            "rule",
+            "registry",
+            "per-kind",
+            "required",
+            "forbidden",
+            "sorted",
+            "set"
+          ],
+          "line": 741,
+          "name": "parseRule"
+        },
+        {
+          "kw": [
+            "step",
+            "per-kind",
+            "key",
+            "tables",
+            "vocabulary",
+            "foreach",
+            "exit",
+            "distinct"
+          ],
+          "line": 834,
+          "name": "parseStep"
+        },
+        {
+          "kw": [
+            "lint",
+            "declare-before-use",
+            "edges",
+            "reachability",
+            "guaranteed-deny",
+            "guarded",
+            "segment",
+            "dead",
+            "declarations"
+          ],
+          "line": 1028,
+          "name": "lint"
+        }
+      ]
+    },
+    {
+      "doc": "Package recipestore is the recipe-authoring core for the admin console: validate recipe YAML through the REAL parser + linter and persist valid recipes. Validate returns whether a draft parses, its lint error or warnings",
+      "keywords": [
+        "recipe",
+        "authoring",
+        "validate",
+        "lint",
+        "tier",
+        "preview",
+        "store",
+        "crud",
+        "fail-closed",
+        "no-traversal",
+        "admin"
+      ],
+      "layer": "gate",
+      "package": "recipestore",
+      "path": "stoa-kernel/stag/recipestore/recipestore.go",
+      "symbols": [
+        {
+          "kw": [
+            "tier",
+            "row",
+            "label",
+            "verdict",
+            "tier"
+          ],
+          "line": 23,
+          "name": "TierRow"
+        },
+        {
+          "kw": [
+            "validate",
+            "result",
+            "valid",
+            "name",
+            "hash",
+            "error",
+            "warnings",
+            "tiers"
+          ],
+          "line": 30,
+          "name": "ValidateResult"
+        },
+        {
+          "kw": [
+            "store",
+            "dir",
+            "file-backed",
+            "recipes"
+          ],
+          "line": 40,
+          "name": "Store"
+        },
+        {
+          "kw": [
+            "vocab",
+            "union",
+            "of",
+            "rule",
+            "set",
+            "members",
+            "sorted"
+          ],
+          "line": 80,
+          "name": "vocab"
+        },
+        {
+          "kw": [
+            "tier",
+            "name",
+            "auto",
+            "benign",
+            "escalate",
+            "deny",
+            "from",
+            "eval",
+            "result"
+          ],
+          "line": 96,
+          "name": "tierName"
+        },
+        {
+          "kw": [
+            "list",
+            "all",
+            "recipes",
+            "validated",
+            "sorted"
+          ],
+          "line": 110,
+          "name": "List"
+        },
+        {
+          "kw": [
+            "get",
+            "raw",
+            "bytes",
+            "name",
+            "sanitized"
+          ],
+          "line": 134,
+          "name": "Get"
+        },
+        {
+          "kw": [
+            "save",
+            "validate",
+            "then",
+            "write",
+            "fail-closed"
+          ],
+          "line": 142,
+          "name": "Save"
+        },
+        {
+          "kw": [
+            "delete",
+            "name",
+            "sanitized"
+          ],
+          "line": 159,
+          "name": "Delete"
+        },
+        {
+          "kw": [
+            "name",
+            "ok",
+            "recipe",
+            "identifier",
+            "grammar",
+            "no",
+            "traversal"
+          ],
+          "line": 167,
+          "name": "nameOK"
+        }
+      ]
+    },
+    {
+      "doc": "Package router resolves the persisted route table (Planning/18) into a live proxy.Router \u2014 the step that makes the gate MULTI-TOOL from saved bindings. A stored route binds a tool to a recipe BY NAME + a gated arg; Build",
+      "keywords": [
+        "route",
+        "resolve",
+        "build",
+        "proxy",
+        "router",
+        "recipe-by-name",
+        "fail-closed",
+        "multi-tool",
+        "gate",
+        "binding"
+      ],
+      "layer": "gate",
+      "package": "router",
+      "path": "stoa-kernel/stag/router/router.go",
+      "symbols": [
+        {
+          "kw": [
+            "spec",
+            "tool",
+            "recipe-name",
+            "gate-arg",
+            "(a",
+            "stored",
+            "binding)"
+          ],
+          "line": 17,
+          "name": "Spec"
+        },
+        {
+          "kw": [
+            "route",
+            "error",
+            "tool",
+            "recipe",
+            "reason",
+            "unresolved"
+          ],
+          "line": 24,
+          "name": "RouteError"
+        },
+        {
+          "kw": [
+            "resolved",
+            "router",
+            "errors"
+          ],
+          "line": 31,
+          "name": "Resolved"
+        },
+        {
+          "kw": [
+            "build",
+            "resolve",
+            "specs",
+            "load",
+            "parse",
+            "fail-closed"
+          ],
+          "line": 37,
+          "name": "Build"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "approval",
+        "endpoints",
+        "list",
+        "approve",
+        "deny",
+        "signed-release",
+        "mint",
+        "ed25519",
+        "pending",
+        "queue",
+        "stage5"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/approvals.go",
+      "symbols": [
+        {
+          "kw": [
+            "approval",
+            "view",
+            "id",
+            "tool",
+            "args",
+            "status",
+            "token-present",
+            "fingerprint",
+            "recipe",
+            "timestamps"
+          ],
+          "line": 15,
+          "name": "ApprovalView"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "mcp",
+        "server",
+        "endpoints",
+        "add",
+        "discover",
+        "list",
+        "delete",
+        "adapters",
+        "act-channel",
+        "downstream"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/mcpservers.go",
+      "symbols": [
+        {
+          "kw": [
+            "mcp",
+            "tool",
+            "view",
+            "name",
+            "schema"
+          ],
+          "line": 14,
+          "name": "MCPToolView"
+        },
+        {
+          "kw": [
+            "mcp",
+            "server",
+            "view",
+            "name",
+            "transport",
+            "target",
+            "enabled",
+            "tools",
+            "discover-error",
+            "auth"
+          ],
+          "line": 20,
+          "name": "MCPServerView"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "context",
+        "provider",
+        "endpoints",
+        "read",
+        "channel",
+        "list",
+        "put",
+        "delete",
+        "adapters",
+        "config"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/providers.go",
+      "symbols": [
+        {
+          "kw": [
+            "provider",
+            "view",
+            "name",
+            "kind",
+            "config",
+            "enabled"
+          ],
+          "line": 14,
+          "name": "ProviderView"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "recipe",
+        "authoring",
+        "endpoints",
+        "validate",
+        "list",
+        "get",
+        "save",
+        "delete",
+        "admin",
+        "console"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/recipes.go",
+      "symbols": [
+        {
+          "kw": [
+            "recipe",
+            "detail",
+            "name",
+            "src",
+            "validate",
+            "result"
+          ],
+          "line": 13,
+          "name": "RecipeDetail"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "route",
+        "endpoints",
+        "tool",
+        "recipe",
+        "binding",
+        "list",
+        "put",
+        "delete",
+        "resolution",
+        "status",
+        "multi-tool"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/routes.go",
+      "symbols": [
+        {
+          "kw": [
+            "route",
+            "view",
+            "tool",
+            "recipe",
+            "gatearg",
+            "valid",
+            "error",
+            "resolution"
+          ],
+          "line": 15,
+          "name": "RouteView"
+        }
+      ]
+    },
+    {
+      "doc": "Package serve is the HTTP operator surface over the gating proxy (Planning/16): the backend the Next.js console talks to. It wraps a proxy.Gate in a thin, fail-closed JSON HTTP layer \u2014 POST /api/decide gates a submitted ",
+      "keywords": [
+        "http",
+        "api",
+        "console",
+        "proxy",
+        "gate",
+        "decide",
+        "log",
+        "policies",
+        "health",
+        "fail-closed",
+        "json",
+        "cors",
+        "no-auth"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/serve.go",
+      "symbols": [
+        {
+          "kw": [
+            "server",
+            "gate",
+            "logpath",
+            "pub",
+            "priv",
+            "policies",
+            "recipes",
+            "store",
+            "approval-webhook"
+          ],
+          "line": 30,
+          "name": "Server"
+        },
+        {
+          "kw": [
+            "policy",
+            "view",
+            "tool",
+            "recipe",
+            "gatearg"
+          ],
+          "line": 72,
+          "name": "PolicyView"
+        },
+        {
+          "kw": [
+            "chain",
+            "view",
+            "sense",
+            "reason",
+            "decide",
+            "act",
+            "prove"
+          ],
+          "line": 79,
+          "name": "ChainView"
+        },
+        {
+          "kw": [
+            "event",
+            "view",
+            "field",
+            "rule",
+            "actor",
+            "subject"
+          ],
+          "line": 88,
+          "name": "EventView"
+        },
+        {
+          "kw": [
+            "decision",
+            "view",
+            "verdict",
+            "forward",
+            "value",
+            "rule",
+            "chain",
+            "events"
+          ],
+          "line": 96,
+          "name": "DecisionView"
+        },
+        {
+          "kw": [
+            "verify",
+            "view",
+            "count",
+            "head",
+            "signed",
+            "keyid",
+            "verified",
+            "error"
+          ],
+          "line": 110,
+          "name": "VerifyView"
+        },
+        {
+          "kw": [
+            "log",
+            "view",
+            "events",
+            "verify"
+          ],
+          "line": 120,
+          "name": "LogView"
+        },
+        {
+          "kw": [
+            "handler",
+            "mux",
+            "routes",
+            "api",
+            "decide",
+            "log",
+            "policies",
+            "health",
+            "cors"
+          ],
+          "line": 126,
+          "name": "Handler"
+        },
+        {
+          "kw": [
+            "cors",
+            "permissive",
+            "dev",
+            "preflight"
+          ],
+          "line": 177,
+          "name": "cors"
+        },
+        {
+          "kw": [
+            "decide",
+            "decode",
+            "gate",
+            "view",
+            "fail-closed"
+          ],
+          "line": 192,
+          "name": "handleDecide"
+        },
+        {
+          "kw": [
+            "view",
+            "decision",
+            "to",
+            "legible",
+            "view",
+            "chain",
+            "events"
+          ],
+          "line": 211,
+          "name": "view"
+        },
+        {
+          "kw": [
+            "log",
+            "read",
+            "verify",
+            "signed",
+            "events"
+          ],
+          "line": 241,
+          "name": "handleLog"
+        },
+        {
+          "kw": [
+            "read",
+            "events",
+            "parse",
+            "leaves",
+            "to",
+            "event",
+            "views"
+          ],
+          "line": 276,
+          "name": "readEvents"
+        }
+      ]
+    },
+    {
+      "doc": "Package stag is the public entry point to the StAG kernel: Eval, the recipe evaluator that composes the internal trust/gate/release/record primitives into the product's load-bearing guarantee (no non-authoritative value ",
+      "keywords": [
+        "stag",
+        "public",
+        "api",
+        "recipe",
+        "eval",
+        "compose",
+        "kernel",
+        "invariant",
+        "facade",
+        "re-export",
+        "graph",
+        "walk",
+        "branch",
+        "gate"
+      ],
+      "layer": "gate",
+      "package": "stag",
+      "path": "stoa-kernel/stag/stag.go",
+      "symbols": [
+        {
+          "kw": [
+            "facade",
+            "re-exports",
+            "one",
+            "hashing",
+            "discipline",
+            "one",
+            "enum",
+            "register"
+          ],
+          "line": 50,
+          "name": "CanonicalHash"
+        },
+        {
+          "kw": [
+            "parse",
+            "inverses",
+            "re-export",
+            "fail-closed"
+          ],
+          "line": 53,
+          "name": "ParseTrustClass"
+        },
+        {
+          "kw": [
+            "bind",
+            "graph",
+            "slot",
+            "value",
+            "class",
+            "origin"
+          ],
+          "line": 58,
+          "name": "Slot"
+        },
+        {
+          "kw": [
+            "recipe",
+            "node",
+            "kind",
+            "propose",
+            "sink",
+            "branch",
+            "gate"
+          ],
+          "line": 65,
+          "name": "NodeKind"
+        },
+        {
+          "kw": [
+            "node",
+            "kind",
+            "string",
+            "canonical",
+            "register"
+          ],
+          "line": 82,
+          "name": "String"
+        },
+        {
+          "kw": [
+            "parse",
+            "node",
+            "kind",
+            "fail-closed",
+            "inverse",
+            "of",
+            "string"
+          ],
+          "line": 102,
+          "name": "ParseNodeKind"
+        },
+        {
+          "kw": [
+            "branch",
+            "case",
+            "closed",
+            "predicate",
+            "forward",
+            "edge"
+          ],
+          "line": 122,
+          "name": "Case"
+        },
+        {
+          "kw": [
+            "recipe",
+            "step",
+            "propose",
+            "sink",
+            "branch",
+            "gate",
+            "forward-only",
+            "edges"
+          ],
+          "line": 128,
+          "name": "Step"
+        },
+        {
+          "kw": [
+            "recipe",
+            "ingredients",
+            "steps"
+          ],
+          "line": 146,
+          "name": "Recipe"
+        },
+        {
+          "kw": [
+            "sink",
+            "outcome",
+            "verdict",
+            "per",
+            "sink"
+          ],
+          "line": 152,
+          "name": "SinkOutcome"
+        },
+        {
+          "kw": [
+            "gate",
+            "outcome",
+            "checkpoint",
+            "pass",
+            "fail",
+            "escalate"
+          ],
+          "line": 161,
+          "name": "GateOutcome"
+        },
+        {
+          "kw": [
+            "eval",
+            "result",
+            "verdict",
+            "sinks",
+            "gates",
+            "events",
+            "fault"
+          ],
+          "line": 169,
+          "name": "EvalResult"
+        },
+        {
+          "kw": [
+            "eval",
+            "recipe",
+            "path",
+            "walk",
+            "forward-only",
+            "compose",
+            "kernel",
+            "invariant",
+            "foreach",
+            "single-arg"
+          ],
+          "line": 178,
+          "name": "Eval"
+        },
+        {
+          "kw": [
+            "eval",
+            "multi-arg",
+            "named",
+            "inputs",
+            "propose-by-name"
+          ],
+          "line": 187,
+          "name": "EvalArgs"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "approval",
+        "queue",
+        "escalate",
+        "pending",
+        "signed-release",
+        "token",
+        "one-time",
+        "consume",
+        "fail-closed",
+        "sqlite"
+      ],
+      "layer": "gate",
+      "package": "store",
+      "path": "stoa-kernel/stag/store/approval.go",
+      "symbols": [
+        {
+          "kw": [
+            "approval",
+            "record",
+            "escalated",
+            "action",
+            "awaiting/holding",
+            "a",
+            "signed",
+            "release"
+          ],
+          "line": 13,
+          "name": "Approval"
+        }
+      ]
+    },
+    {
+      "doc": "Package store is the SQLite config store for the admin console's Adapters (Planning/18): the persisted, RELATIONAL config that the file-based recipes bind to \u2014 MCP servers (+ their tools), context providers, and routes (",
+      "keywords": [
+        "sqlite",
+        "config",
+        "store",
+        "adapters",
+        "mcp-server",
+        "context-provider",
+        "route",
+        "ddl",
+        "no-migrations",
+        "quarantined"
+      ],
+      "layer": "gate",
+      "package": "store",
+      "path": "stoa-kernel/stag/store/store.go",
+      "symbols": [
+        {
+          "kw": [
+            "mcp",
+            "server",
+            "name",
+            "transport",
+            "target",
+            "enabled",
+            "tools",
+            "downstream-auth"
+          ],
+          "line": 26,
+          "name": "MCPServer"
+        },
+        {
+          "kw": [
+            "mcp",
+            "tool",
+            "server",
+            "name",
+            "input",
+            "schema"
+          ],
+          "line": 53,
+          "name": "MCPTool"
+        },
+        {
+          "kw": [
+            "context",
+            "provider",
+            "name",
+            "kind",
+            "config",
+            "enabled"
+          ],
+          "line": 60,
+          "name": "ContextProvider"
+        },
+        {
+          "kw": [
+            "route",
+            "tool",
+            "recipe",
+            "gate-arg",
+            "binding"
+          ],
+          "line": 68,
+          "name": "Route"
+        },
+        {
+          "kw": [
+            "store",
+            "sqlite",
+            "db",
+            "handle"
+          ],
+          "line": 75,
+          "name": "Store"
+        },
+        {
+          "kw": [
+            "open",
+            "create",
+            "run",
+            "ddl",
+            "fail-closed",
+            "no-migrations",
+            "single-conn"
+          ],
+          "line": 80,
+          "name": "Open"
+        },
+        {
+          "kw": [
+            "close",
+            "db"
+          ],
+          "line": 95,
+          "name": "Close"
+        },
+        {
+          "kw": [
+            "put",
+            "mcp",
+            "server",
+            "upsert",
+            "replace",
+            "tools",
+            "transaction",
+            "atomic"
+          ],
+          "line": 105,
+          "name": "PutMCPServer"
+        },
+        {
+          "kw": [
+            "get",
+            "mcp",
+            "server",
+            "with",
+            "tools",
+            "not-found",
+            "fail-closed"
+          ],
+          "line": 137,
+          "name": "GetMCPServer"
+        },
+        {
+          "kw": [
+            "tools",
+            "for",
+            "server",
+            "ordered"
+          ],
+          "line": 156,
+          "name": "toolsFor"
+        },
+        {
+          "kw": [
+            "list",
+            "mcp",
+            "servers",
+            "ordered",
+            "with",
+            "tools"
+          ],
+          "line": 175,
+          "name": "ListMCPServers"
+        },
+        {
+          "kw": [
+            "delete",
+            "mcp",
+            "server",
+            "and",
+            "tools",
+            "transaction"
+          ],
+          "line": 207,
+          "name": "DeleteMCPServer"
+        },
+        {
+          "kw": [
+            "put",
+            "provider",
+            "upsert"
+          ],
+          "line": 223,
+          "name": "PutProvider"
+        },
+        {
+          "kw": [
+            "list",
+            "providers",
+            "ordered"
+          ],
+          "line": 235,
+          "name": "ListProviders"
+        },
+        {
+          "kw": [
+            "delete",
+            "provider"
+          ],
+          "line": 255,
+          "name": "DeleteProvider"
+        },
+        {
+          "kw": [
+            "put",
+            "route",
+            "upsert",
+            "by",
+            "tool"
+          ],
+          "line": 261,
+          "name": "PutRoute"
+        },
+        {
+          "kw": [
+            "list",
+            "routes",
+            "ordered"
+          ],
+          "line": 273,
+          "name": "ListRoutes"
+        },
+        {
+          "kw": [
+            "delete",
+            "route",
+            "by",
+            "tool"
+          ],
+          "line": 291,
+          "name": "DeleteRoute"
+        }
+      ]
+    }
+  ],
+  "layers": {
+    "binary": "cmd/ \u2014 the shipped binaries; each is its own container.",
+    "gate": "stag/ \u2014 deterministic kernel, policy, MCP proxy, audit, approvals. NO model, NO keys.",
+    "orchestrator": "harness/ \u2014 dispatcher, agent loop, models. HOLDS THE KEYS."
+  },
+  "note": "generated by tools/index.sh from file-kw:/kw: markers in the source \u2014 do not hand-edit"
+}

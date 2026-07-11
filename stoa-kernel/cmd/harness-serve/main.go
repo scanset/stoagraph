@@ -9,6 +9,8 @@
 // API only. The console is the Next.js app in frontend/, which unifies BOTH backends' surfaces.
 package main
 
+// file-kw: cmd orchestrator api models keys dispatch event-map sse operator-role never-approve cors
+
 import (
 	"encoding/json"
 	"flag"

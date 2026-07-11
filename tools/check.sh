@@ -40,6 +40,16 @@ else
   printf '  – skipped (run: cd frontend && npm ci)\n'
 fi
 
+step "code index"
+# An index nobody maintains is a map that lies, and a lying map is worse than no map. This fails if a
+# file was added without a `// file-kw:` marker, or if the index was not rebuilt after a change.
+if bash tools/index.sh --check >/tmp/idx.$$ 2>&1; then
+  ok "index current"
+else
+  no "index stale/incomplete:"; sed 's/^/      /' /tmp/idx.$$
+fi
+rm -f /tmp/idx.$$
+
 step "repo hygiene"
 if bash tools/hygiene.sh >/tmp/hygiene.$$ 2>&1; then
   ok "hygiene OK"

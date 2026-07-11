@@ -8,6 +8,8 @@
 // stag-proxy as a client — every tool the model calls is gated before it reaches downstream.
 package main
 
+// file-kw: cmd orchestrator cli minimal agent loop proposer gated stdio seed
+
 import (
 	"bytes"
 	"context"

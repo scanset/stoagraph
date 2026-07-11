@@ -6,7 +6,16 @@ ARG NODE_VERSION=22
 FROM node:${NODE_VERSION}-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# Drop `sharp` + its libvips blobs. Next pulls it in for next/image optimisation; this console uses
+# next/image NOWHERE, so it is 33MB of dead weight — and LGPL-3.0, the only copyleft component in the
+# whole product. Removing it keeps the licence surface permissive (MIT/BSD/Apache).
+#
+# Do NOT reach for `--omit=optional` here: Next's own native compiler (@next/swc-*) is ALSO an optional
+# dependency, and omitting it breaks the build ("Turbopack is not supported on this platform"). Remove
+# the one package, not the whole class.
+#
+# If you ever add next/image: delete the rm, and record the LGPL-3.0 obligation in the SBOM review.
+RUN npm ci && rm -rf node_modules/sharp node_modules/@img
 
 FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app

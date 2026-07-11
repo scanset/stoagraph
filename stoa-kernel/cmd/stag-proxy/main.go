@@ -9,6 +9,8 @@
 // stdio). Routes are resolved once at startup. Streamable HTTP + session->recipe is next.
 package main
 
+// file-kw: cmd gate mcp gating proxy daemon session-to-recipe stdio streamable-http live-vs-ready fail-closed dispatch-role
+
 import (
 	"bytes"
 	"context"

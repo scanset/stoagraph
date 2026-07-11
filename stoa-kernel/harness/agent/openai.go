@@ -1,5 +1,7 @@
 package agent
 
+// file-kw: adapter openai-compatible tool-use proposer translate mcp-tools-to-provider-schema base-url
+
 import (
 	"bytes"
 	"context"

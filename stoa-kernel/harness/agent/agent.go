@@ -4,6 +4,8 @@
 // (Claude and OpenAI/OpenRouter both implement it).
 package agent
 
+// file-kw: agent loop tool-use propose gate verdict forward transcript sse max-turns untrusted-proposer
+
 import (
 	"context"
 	"encoding/json"

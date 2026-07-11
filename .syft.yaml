@@ -1,0 +1,9 @@
+# syft config — used by tools/sbom.sh and CI so everyone generates the SAME bill of materials.
+#
+# Catalog PACKAGES, not files. Without this, syft emits a `file` component for every file in the image
+# — ~950 of them per Go image — and the 27 dependencies that actually matter drown in digest noise.
+# An SBOM nobody can read is an SBOM nobody reads.
+file:
+  metadata:
+    selection: none
+  digests: []

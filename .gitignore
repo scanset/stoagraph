@@ -39,3 +39,6 @@ out/
 *.tsbuildinfo
 
 .DS_Store
+
+# tool cache (syft etc.)
+/.cache/

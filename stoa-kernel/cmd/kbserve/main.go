@@ -5,6 +5,8 @@
 // and model-free. This is product/demo infra, NOT part of stag.
 package main
 
+// file-kw: cmd context-provider read-channel kb embed ollama downstream gate-stays-model-free
+
 import (
 	"context"
 	"flag"

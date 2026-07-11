@@ -151,5 +151,27 @@ services:
     depends_on: [stag-serve, harness-serve]
     restart: unless-stopped
 
+  # ------------------------------------------------ THE EXAMPLE DOWNSTREAM
+  # The containment story, as a real MCP tool server the gate proxies over the network.
+  #   fetch_user_profile  -> returns a record CONTAINING an SSN   (the agent is meant to read it)
+  #   send_external_reply -> the egress point                     (the SSN must never cross it)
+  # The policy does not scan for SSNs. It permits only four approved template ids, so no free-form
+  # value can leave — containment is STRUCTURAL. Wire it with: tools/demo.sh
+  #
+  # Note it speaks streamable HTTP, not stdio: a distroless gate cannot spawn a subprocess, and we
+  # would rather keep the gate minimal than bake an interpreter into it.
+  pii-demo:
+    build:
+      <<: *gate-build
+      args: [CMD=example-pii]
+    command: ["-http", ":9000"]
+    ports: ["9000:9000"]
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   data:

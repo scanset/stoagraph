@@ -8,6 +8,8 @@
 // all of them (a probe has no credential to present, and liveness is not a secret).
 package main
 
+// file-kw: container liveness probe static distroless no-shell exit-code
+
 import (
 	"fmt"
 	"net/http"

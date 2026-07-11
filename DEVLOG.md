@@ -48,6 +48,45 @@ many `Planning/` docs) predate this and use "StoaGraph" to mean the gate — rea
 
 ## Entries
 
+## 2026-07-11 — v0.1 blockers cleared: license, a working quickstart, CI
+**Phase:** release. **Status:** DONE + verified from a wiped tree (no volumes, no data). Ready to tag.
+**The three things that actually blocked a tag** (the core was already strong; these were not):
+1. **LICENSE — Apache-2.0** (+ NOTICE). Without it the repo is legally "all rights reserved" and
+   **nobody can use it**. An OSS release without a license is not an OSS release. Patent grant matters
+   for the enterprise/public-sector legal teams this is aimed at.
+2. **`docker compose up` dead-ended.** The README's PRIMARY path ended at `{"ready":false}` — the
+   bundled example tool servers speak stdio, and a distroless gate cannot spawn a python subprocess.
+   A broken first run for a *security* tool is worse than no quickstart.
+   **Fix:** rewrote pii-demo as `cmd/example-pii` — a Go MCP server serving **stdio AND streamable
+   HTTP** from one binary, built by the same Dockerfile into the same distroless image. No python, no
+   interpreter, in any image. Added it as a compose service; `tools/demo.sh` authors the policy and
+   registers it. The gate polls, flips to `ready`, and the demo runs.
+3. **No CI.** Nothing ran `tools/check.sh` on push — which means the **architecture test could rot
+   silently**, and with it the central claim it makes true. Added `.github/workflows/ci.yml`: the
+   `check` job runs the *same* script a developer runs (a CI file that drifts from the local command is
+   a CI file that lies), plus a standalone **ARCHITECTURE** job so a breach is unmissable in the PR
+   checklist, plus an `images` job that builds all six containers and validates the compose file.
+**The demo, and why it is the right one** — no model, no API key, ~90 seconds:
+```
+fetch_user_profile(123)                          ALLOW   returns Alice's record, INCLUDING her SSN
+send_external_reply("Your SSN is 000-12-3456")   DENY    never reaches the tool
+send_external_reply("Hi Alice, you're unlocked") DENY    <- INNOCENT, and still blocked
+send_external_reply("tmpl:account_unlocked")     ALLOW   an approved template
+```
+The third line is the whole product. An innocent message is blocked *too*, because **no free-form value
+can cross at all** — the policy never scans for SSNs, it permits four template ids. There is no clever
+phrasing that becomes an approved template id, which is precisely why a jailbroken or prompt-injected
+model cannot defeat it. **Containment is structural, not content-based.**
+**Verified from nothing:** `docker compose down -v` + `rm -rf data logs` → six containers healthy →
+instance EMPTY (0 recipes, 0 routes, gate `ready:false`, fail-closed) → `tools/demo.sh` → gate
+`ready:true` → the four verdicts above. `tools/check.sh`: ALL CHECKS PASSED.
+**Still honestly deferred (documented as non-goals, not hidden):** event listeners (real ingress),
+approver IDENTITY (v1 proves *someone* holding `approve` approved, not *which human*), durable approval
+hold, multi-downstream, secrets-at-rest, rate limiting, frontend tests.
+**Next action:** commit, tag v0.1.0, push. **Rotate the leaked Anthropic/Qwen keys first** — a pushed
+key is a leaked key, and deleting the old repo does not retract it.
+
+
 ## 2026-07-11 — Docker: five containers, and the secret split that makes them necessary
 **Phase:** packaging. **Status:** BUILT + verified live in Docker. All checks green.
 **The finding that drove the design (Curtis asked "wouldn't one container be better?"):**

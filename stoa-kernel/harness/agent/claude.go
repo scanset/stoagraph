@@ -1,5 +1,7 @@
 package agent
 
+// file-kw: adapter claude anthropic tool-use proposer translate mcp-tools-to-provider-schema
+
 import (
 	"context"
 	"encoding/json"
