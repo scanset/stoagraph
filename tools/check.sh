@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# tools/check.sh — the full verification gate. One command; what CI runs.
+# tools/check.sh — the full verification gate. One command; exactly what CI runs.
 #
-#   gofmt · go vet · go test · ARCHITECTURE · frontend typecheck · repo hygiene
+#   gofmt · go vet · go test · ARCHITECTURE · frontend typecheck · code index · repo hygiene
 #
-# The architecture test is not a formality. Merging the gate and the orchestrator into one Go module
-# removed the module boundary that used to make "the gate holds no model and no keys" structurally
-# true. stoa-kernel/architecture_test.go puts it back as an enforced rule: it fails if any stag/...
-# package — or either gate BINARY — so much as imports harness/... . If that ever goes red, the
-# product's central claim is false; it is not a style violation.
+# Every check is judged by its EXIT CODE, and its output is shown only when it fails.
+#
+# That is not a style preference — it is a bug fix. This script used to decide "did it pass?" by
+# grepping the command's output, so on a cold module cache `go: downloading modernc.org/...` (progress
+# chatter on stderr) was read as a vet diagnostic and CI failed a clean tree. A check that cries wolf is
+# a check people learn to ignore, which is worse than no check at all. Exit codes are the contract; the
+# output is just for humans.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
@@ -15,48 +17,49 @@ fail=0
 step() { printf '\n== %s ==\n' "$1"; }
 ok()   { printf '  ✓ %s\n' "$1"; }
 no()   { printf '  ✗ %s\n' "$1"; fail=1; }
+show() { sed 's/^/      /' <<<"$1"; }
+
+# Warm the module cache first, so a slow network cannot be mistaken for a broken tree and so the
+# per-check output below is signal, not progress bars.
+(cd stoa-kernel && go mod download) >/dev/null 2>&1 || true
 
 step "gofmt"
 unformatted=$(gofmt -l stoa-kernel 2>/dev/null)
-if [ -n "$unformatted" ]; then no "unformatted:"; echo "$unformatted" | sed 's/^/      /'; else ok "formatted"; fi
+if [ -n "$unformatted" ]; then no "unformatted:"; show "$unformatted"; else ok "formatted"; fi
 
 step "go vet"
-if (cd stoa-kernel && go vet ./... 2>&1 | grep -v '^#' | grep .); then no "vet found problems"; else ok "vet clean"; fi
+if out=$( (cd stoa-kernel && go vet ./...) 2>&1 ); then ok "vet clean"; else no "vet found problems:"; show "$out"; fi
 
 step "go test"
-if (cd stoa-kernel && go test ./... 2>&1 | grep -vE '^ok|no test files' | grep .); then no "tests failed"; else ok "tests pass"; fi
+if out=$( (cd stoa-kernel && go test ./...) 2>&1 ); then
+  ok "tests pass"
+else
+  no "tests failed:"; show "$(grep -vE '^(ok|---)' <<<"$out" | head -40)"
+fi
 
 step "ARCHITECTURE — the gate must not depend on the orchestrator"
-if (cd stoa-kernel && go test -run TestGate . 2>&1 | grep -qE '^ok'); then
+# The product's central claim ("the gate holds no model and no keys") is TRUE only while this passes.
+# If it goes red the claim is false, and no amount of "but it works" makes the build safe to ship.
+if out=$( (cd stoa-kernel && go test -run TestGate .) 2>&1 ); then
   ok "stag/ imports zero harness/ code (and neither gate binary links it)"
 else
-  no "ARCHITECTURE BREACH — the gate reaches orchestrator code. The 'no model, no keys' claim is FALSE."
+  no "ARCHITECTURE BREACH — the gate reaches orchestrator code:"; show "$out"
 fi
 
 step "frontend typecheck"
 if [ -d frontend/node_modules ]; then
-  if (cd frontend && npx tsc --noEmit 2>&1 | grep .); then no "typecheck failed"; else ok "typecheck clean"; fi
+  if out=$( (cd frontend && npx tsc --noEmit) 2>&1 ); then ok "typecheck clean"; else no "typecheck failed:"; show "$out"; fi
 else
   printf '  – skipped (run: cd frontend && npm ci)\n'
 fi
 
 step "code index"
-# An index nobody maintains is a map that lies, and a lying map is worse than no map. This fails if a
-# file was added without a `// file-kw:` marker, or if the index was not rebuilt after a change.
-if bash tools/index.sh --check >/tmp/idx.$$ 2>&1; then
-  ok "index current"
-else
-  no "index stale/incomplete:"; sed 's/^/      /' /tmp/idx.$$
-fi
-rm -f /tmp/idx.$$
+# An index nobody maintains is a map that lies, and a lying map is worse than no map. Fails if a file
+# was added without a `// file-kw:` marker, or if the index was not rebuilt after a change.
+if out=$(bash tools/index.sh --check 2>&1); then ok "index current"; else no "index stale/incomplete:"; show "$out"; fi
 
 step "repo hygiene"
-if bash tools/hygiene.sh >/tmp/hygiene.$$ 2>&1; then
-  ok "hygiene OK"
-else
-  no "hygiene FAILED:"; sed 's/^/      /' /tmp/hygiene.$$
-fi
-rm -f /tmp/hygiene.$$
+if out=$(bash tools/hygiene.sh 2>&1); then ok "hygiene OK"; else no "hygiene FAILED:"; show "$out"; fi
 
 echo
 [ "$fail" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; }
