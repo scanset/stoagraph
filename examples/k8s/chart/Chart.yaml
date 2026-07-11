@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-app
+description: A tiny sample workload for the StoaGraph k8s test bed — gives the agent real pods/deployments to read (and later scale/restart/delete). Install once per namespace (dev/staging/prod).
+type: application
+version: 0.1.0
+appVersion: "1.27"

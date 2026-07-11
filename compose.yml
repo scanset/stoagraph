@@ -1,0 +1,155 @@
+# StoaGraph — the whole product.
+#
+#   docker compose up
+#
+# FIVE containers, not one. That is the security posture, not a diagram preference.
+#
+# The control plane uses per-ROLE secrets. `approve` releases a held action and belongs to a HUMAN;
+# the orchestrator must never be able to reach it. If it could, a compromised orchestrator would
+# approve its own escalations and human-in-the-loop would be theatre — and note that the gate's HTTP
+# role check does NOT save you here: the orchestrator would not send `dispatch` to an approve route
+# and accept the 401, it would send the `approve` token it was holding.
+#
+# So: NO container mounts the tokens file, and each service is injected ONLY the secrets it is
+# entitled to. Read the `environment:` blocks below as the access-control matrix — they are the
+# enforcement, not documentation of it:
+#
+#   stag-serve     admin, approve, dispatch      the gate's control plane (verifies all three)
+#   stag-proxy     dispatch                      it only guards POST /sessions
+#   harness-serve  dispatch, operator            NEVER approve. It waits on a human; it cannot be one.
+#   kbserve        (none)                        a context provider; it has no control plane
+#   console        (none)                        the human types their token into the browser
+#
+# Generate the secrets once:  tools/gen-env.sh    (writes .env, gitignored)
+
+name: stoagraph
+
+x-gate-build: &gate-build
+  context: .
+  dockerfile: Dockerfile
+
+services:
+  # ---------------------------------------------------------------- THE GATE
+  # Deterministic policy, audit, approvals. Holds no model and no API keys — enforced by
+  # stoa-kernel/architecture_test.go, which fails the build if a gate package imports orchestrator code.
+  stag-serve:
+    build:
+      <<: *gate-build
+      args: [CMD=stag-serve]
+    command: ["-addr", ":8080", "-tokens", ""] # -tokens "" => env only; no secrets file on disk
+    environment:
+      STAG_ADMIN_TOKEN: ${STAG_ADMIN_TOKEN:?run tools/gen-env.sh}
+      STAG_APPROVE_TOKEN: ${STAG_APPROVE_TOKEN:?run tools/gen-env.sh}
+      STAG_DISPATCH_TOKEN: ${STAG_DISPATCH_TOKEN:?run tools/gen-env.sh}
+    ports: ["8080:8080"]
+    volumes:
+      - data:/app/data # config DB, the recipe store, the audit logs
+      - ./examples:/app/examples:ro
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # The MCP gating proxy. Sessions are bound to a recipe HERE, by the trusted dispatcher.
+  # It waits for a downstream to be registered rather than crash-looping on a fresh instance.
+  stag-proxy:
+    build:
+      <<: *gate-build
+      args: [CMD=stag-proxy]
+    command: ["-http", ":8091", "-tokens", ""]
+    environment:
+      STAG_DISPATCH_TOKEN: ${STAG_DISPATCH_TOKEN:?run tools/gen-env.sh}
+    ports: ["8091:8091"]
+    volumes:
+      - data:/app/data
+    depends_on:
+      stag-serve: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:8091/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # ------------------------------------------------------- THE ORCHESTRATOR
+  # This is where the model API KEYS live. Note what it is NOT given below.
+  harness-serve:
+    build:
+      <<: *gate-build
+      args: [CMD=harness-serve]
+    command:
+      [
+        "-addr",
+        ":8090",
+        "-tokens",
+        "",
+        "-approvals-url",
+        "http://stag-serve:8080",
+        "-daemon-url",
+        "http://stag-proxy:8091",
+      ]
+    # Run as the HOST user so it can read a 0600 config/models.json on a bind mount. (Distroless
+    # defaults to uid 65532, which cannot read your private file — the mount preserves host ownership.)
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      # Exactly two control-plane secrets. No STAG_APPROVE_TOKEN, no STAG_ADMIN_TOKEN — not "unused",
+      # ABSENT. This block IS the access-control boundary.
+      STAG_DISPATCH_TOKEN: ${STAG_DISPATCH_TOKEN:?run tools/gen-env.sh}
+      HARNESS_OPERATOR_TOKEN: ${HARNESS_OPERATOR_TOKEN:?run tools/gen-env.sh}
+      # PREFERRED: keep provider keys OUT of any file. Set `apiKeyEnv` in config/models.json and put
+      # the key here (from .env). A mounted secrets file is the thing we are trying to avoid.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports: ["8090:8090"]
+    volumes:
+      - ./config:/app/config:ro # event_map.json + models.json — the GATE never sees this mount
+    depends_on:
+      stag-serve: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # --------------------------------------------------- THE READ CHANNEL
+  # An example context provider. The gate proxies it and stamps its output untrusted at origin, so the
+  # EMBEDDER lives out here and the gate stays model-free.
+  kbserve:
+    build:
+      <<: *gate-build
+      args: [CMD=kbserve]
+    command: ["-addr", ":8095", "-kb-dir", "examples/k8s/kb", "-embed-base", "${OLLAMA_URL:-http://host.docker.internal:11434}/v1"]
+    volumes:
+      - ./examples:/app/examples:ro
+    ports: ["8095:8095"]
+    extra_hosts: ["host.docker.internal:host-gateway"] # reach an embedder on the host
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:8095/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s # it embeds the KB corpus on boot
+    restart: unless-stopped
+
+  # ------------------------------------------------------------ THE CONSOLE
+  # Holds no secret at build or run time. The human pastes their token into the browser.
+  console:
+    build:
+      context: ./frontend
+      args:
+        # Baked in at build time (Next inlines NEXT_PUBLIC_*). These are the addresses the BROWSER
+        # will call — not the compose service names, which a browser cannot resolve.
+        NEXT_PUBLIC_API_BASE: ${PUBLIC_GATE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_HARNESS_API: ${PUBLIC_HARNESS_URL:-http://localhost:8090}
+    ports: ["3000:3000"]
+    depends_on: [stag-serve, harness-serve]
+    restart: unless-stopped
+
+volumes:
+  data:

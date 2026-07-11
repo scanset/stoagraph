@@ -1,0 +1,254 @@
+package main
+
+// file-kw: dispatch ingress event->recipe->session->agent turnkey governed-agent sse stream
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/scanset/stoagraph/stoa-kernel/harness/agent"
+	"github.com/scanset/stoagraph/stoa-kernel/harness/bind"
+	"github.com/scanset/stoagraph/stoa-kernel/harness/dispatch"
+)
+
+// getEventMap returns the raw event map JSON (an empty array when the file is absent) for the editor.
+func (s *Server) getEventMap(w http.ResponseWriter, _ *http.Request) {
+	b, err := os.ReadFile(s.eventMap)
+	if os.IsNotExist(err) || len(b) == 0 {
+		writeJSON(w, http.StatusOK, []dispatch.Definition{})
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(b)
+}
+
+// putEventMap validates + persists an edited event map (a JSON array of definitions).
+func (s *Server) putEventMap(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	var m dispatch.EventMap
+	if json.Unmarshal(body, &m) != nil {
+		writeErr(w, http.StatusBadRequest, "invalid event map: expected a JSON array of {id, match, recipe} definitions")
+		return
+	}
+	pretty, _ := json.MarshalIndent(m, "", "  ")
+	if err := os.WriteFile(s.eventMap, append(pretty, '\n'), 0o644); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "count": len(m)})
+}
+
+const defaultDispatchSystem = "You are an operations agent. An event has arrived. Handle it by " +
+	"CALLING the available tools directly — do not just describe. Only the tools this session " +
+	"exposes are available to you."
+
+// dispatch is the turnkey ingress (Planning/25): an EVENT arrives, the dispatcher routes it to a
+// recipe (deterministic event map first, then the dispatch model + Gate), binds a session on the
+// stag-proxy daemon for that recipe, and runs the agent loop against the event — the whole
+// "event → governed agent" path, streamed as SSE. The model never chooses its own recipe, and a
+// misroute cannot breach (stag enforces whatever recipe the session was bound to).
+func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Event         map[string]any `json:"event"`
+		DispatchModel string         `json:"dispatchModel"`
+		Model         string         `json:"model"`
+		System        string         `json:"system"`
+		MaxTurns      int            `json:"maxTurns"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || len(req.Event) == 0 {
+		writeErr(w, 400, "need an event object")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, _ := w.(http.Flusher)
+	emit := func(e agent.Event) {
+		b, _ := json.Marshal(e)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	ctx := r.Context()
+
+	// 1. resolve event -> recipe.
+	var router dispatch.Router
+	if req.DispatchModel != "" {
+		m, ok, err := s.models.Get(req.DispatchModel)
+		if err != nil || !ok {
+			emit(agent.Event{Kind: "error", Text: "dispatch model not found: " + req.DispatchModel})
+			return
+		}
+		router, err = dispatch.NewRouter(m)
+		if err != nil {
+			emit(agent.Event{Kind: "error", Text: err.Error()})
+			return
+		}
+	}
+	stag := dispatch.StagClient{BaseURL: s.approvals, Token: s.stagToken} // the `dispatch` role
+	emap, err := dispatch.LoadEventMap(s.eventMap)
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: err.Error()})
+		return
+	}
+	dec, err := dispatch.Dispatcher{Map: emap, Router: router, Catalog: stag.Catalog}.Dispatch(ctx, dispatch.Event(req.Event))
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: "dispatch: " + err.Error()})
+		return
+	}
+	if !dec.Dispatched() {
+		emit(agent.Event{Kind: "dispatch", Result: "no recipe routed for this event (fail closed)"})
+		emit(agent.Event{Kind: "done"})
+		return
+	}
+	via := dec.Mode
+	if dec.Definition != "" {
+		via += " · " + dec.Definition
+	} else if dec.Router != "" {
+		via += " · " + dec.Router
+	}
+	target := dec.RecipeID
+	if len(dec.Tools) > 0 {
+		target = fmt.Sprintf("toolset [%s]", strings.Join(dec.Tools, ", "))
+	}
+	emit(agent.Event{Kind: "dispatch", Tool: dec.RecipeID,
+		Result: fmt.Sprintf("routed to %s via %s (confidence %s)", target, via, dec.Confidence)})
+
+	// 2. build the session on the daemon — a multi-tool toolset if the definition named one, else
+	//    the single recipe's routes. Each tool stays gated by its own recipe.
+	var routes []dispatch.RouteSpec
+	if len(dec.Tools) > 0 {
+		routes, err = stag.RoutesForTools(dec.Tools)
+	} else {
+		routes, err = stag.RoutesForRecipe(dec.RecipeID)
+	}
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: "routes for session: " + err.Error()})
+		return
+	}
+	// READ channel (Planning/30): resolve the definition's context providers to specs and bind them
+	// alongside the routes, so the gate serves them as untrusted MCP resources. Enrichment, so a
+	// resolution failure is non-fatal — the session just gets no READ channel.
+	providers, perr := stag.ProvidersFor(dec.Context)
+	if perr != nil {
+		emit(agent.Event{Kind: "dispatch", Result: "context providers unavailable, proceeding without READ channel: " + perr.Error()})
+		providers = nil
+	}
+	endpoint, token, err := dispatch.Binder{DaemonURL: s.daemon, Token: s.stagToken}.Bind(ctx, routes, providers)
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: "bind session: " + err.Error()})
+		return
+	}
+	bound := fmt.Sprintf("session bound (token %s…) — %d route(s)", token[:min(8, len(token))], len(routes))
+	if len(providers) > 0 {
+		names := make([]string, len(providers))
+		for i, p := range providers {
+			names[i] = p.Name
+		}
+		bound += fmt.Sprintf(" + %d context provider(s) [%s]", len(providers), strings.Join(names, ", "))
+	}
+	emit(agent.Event{Kind: "dispatch", Result: bound + " on the daemon"})
+
+	// 3. connect the agent loop to the session and run it against the event.
+	sess, tools, err := agent.ConnectHTTP(ctx, endpoint)
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: "connect daemon: " + err.Error()})
+		return
+	}
+	defer sess.Close()
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name
+	}
+	emit(agent.Event{Kind: "text", Text: fmt.Sprintf("agent session — gated tool(s): %v", names)})
+
+	m, ok, err := s.models.Get(req.Model)
+	if err != nil || !ok {
+		emit(agent.Event{Kind: "error", Text: "proposer model not found: " + req.Model})
+		return
+	}
+	system := req.System
+	if system == "" {
+		system = defaultDispatchSystem
+	}
+	// READ channel (Planning/30): read the session's UNTRUSTED context FROM THE GATE. The gate has
+	// already Gathered the bound providers, stamped every item untrusted at origin, and recorded the
+	// crossing — the harness trusts the CHANNEL (stag://context/*), not a flag. bind.Assemble keeps the
+	// trusted instruction in System and the untrusted event + context in Input, labeled as data —
+	// context informs the model but is structurally unable to reach the instruction slot or the gate.
+	eventJSON := eventInput(req.Event)
+	docs := readGateContext(ctx, sess, eventJSON)
+	if len(docs) > 0 {
+		srcs := make([]string, len(docs))
+		for i, d := range docs {
+			srcs[i] = d.Source
+		}
+		emit(agent.Event{Kind: "dispatch", Result: fmt.Sprintf("context: %d untrusted item(s) read from the gate [%s]", len(docs), strings.Join(srcs, ", "))})
+	}
+	breq := bind.Assemble(system, eventJSON, docs)
+	proposer, err := buildModel(m, breq.System, breq.Input, tools)
+	if err != nil {
+		emit(agent.Event{Kind: "error", Text: err.Error()})
+		return
+	}
+	maxTurns := req.MaxTurns
+	if maxTurns <= 0 {
+		maxTurns = 6
+	}
+	agent.Run(ctx, proposer, sess, maxTurns, agent.NewApprovalConfig(s.approvals, s.stagToken), emit)
+}
+
+// eventInput renders the event as compact-ish JSON — the untrusted "ticket". bind.Assemble adds the
+// trust-position framing, so no prefix here.
+func eventInput(e map[string]any) string {
+	b, _ := json.MarshalIndent(e, "", "  ")
+	return string(b)
+}
+
+// contextURIPrefix is the READ-channel namespace the gate serves resource templates under.
+const contextURIPrefix = "stag://context/"
+
+// readGateContext reads the session's context FROM THE GATE (Planning/30): it lists the
+// stag://context/* resource templates the session was bound to and reads each with ?q=<event>. The
+// gate Gathers the providers, stamps every item untrusted at origin, and records the crossing — so
+// the harness trusts the CHANNEL, not the content. Best-effort: any error yields no context (the READ
+// channel is enrichment, never required). The untrusted text goes to bind's Input slot.
+func readGateContext(ctx context.Context, sess *mcp.ClientSession, query string) []bind.Doc {
+	tmpls, err := sess.ListResourceTemplates(ctx, &mcp.ListResourceTemplatesParams{})
+	if err != nil || tmpls == nil {
+		return nil
+	}
+	var docs []bind.Doc
+	for _, t := range tmpls.ResourceTemplates {
+		if !strings.HasPrefix(t.URITemplate, contextURIPrefix) {
+			continue
+		}
+		base := strings.TrimSuffix(t.URITemplate, "{?q}")
+		// The template (RFC 6570 {?q}) matches PERCENT-encoding only; url.QueryEscape emits "+" for
+		// spaces, which the matcher rejects (→ "resource not found"). Encode spaces as %20.
+		res, err := sess.ReadResource(ctx, &mcp.ReadResourceParams{URI: base + "?q=" + strings.ReplaceAll(url.QueryEscape(query), "+", "%20")})
+		if err != nil || res == nil {
+			continue
+		}
+		for _, c := range res.Contents {
+			if strings.TrimSpace(c.Text) == "" {
+				continue
+			}
+			docs = append(docs, bind.Doc{Source: t.Name, Text: c.Text})
+		}
+	}
+	return docs
+}

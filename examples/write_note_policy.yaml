@@ -1,0 +1,22 @@
+recipe: write_note_policy
+version: 1
+
+# A gating-proxy policy for the MCP tool `write_note`: its `text` argument (the
+# untrusted value the agent proposed) must be in the allowed set to be forwarded
+# to the real downstream server. Anything else is denied at the authoritative sink.
+rules:
+  note.allowed:
+    kind: set_membership
+    set: ["hello", "status-ok", "deploy-done"]
+
+steps:
+  - id: propose_text
+    kind: propose
+    out: text
+  - id: apply
+    kind: sink
+    in: text
+    field: mcp.write_note.text
+    sensitivity: authoritative
+    rule: note.allowed
+    actor: "policy:mcp_proxy"

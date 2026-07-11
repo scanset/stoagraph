@@ -1,0 +1,22 @@
+[
+  {
+    "name": "claude",
+    "kind": "claude",
+    "model": "claude-opus-4-8",
+    "apiKeyEnv": "ANTHROPIC_API_KEY"
+  },
+  {
+    "name": "local",
+    "kind": "openai",
+    "model": "qwen2.5-coder",
+    "baseUrl": "http://localhost:11434/v1",
+    "apiKeyEnv": "OPENAI_API_KEY"
+  },
+  {
+    "name": "Open-AI",
+    "kind": "openai",
+    "baseUrl": "https://openrouter.ai/api/v1/",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "apiKey": "OPENAI_API_KEY"
+  }
+]

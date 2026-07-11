@@ -1,0 +1,17 @@
+name: ClaudeProposerTest
+role: test
+intent: Verify the Claude adapter against a FAKE HTTP server (httptest + option.WithBaseURL) - deterministic, offline, no API key, exercising the real SDK request/response marshalling. Prove: it implements model.Proposer; it maps a text response to an untrusted Proposal with honest provenance; it fails closed on API errors and on refusals; it never sends temperature; it defaults the model to Opus 4.8; and - the load-bearing tie to U9 - composed via model.Decide it confers zero trust (verdict == Eval of the value, identical to a LocalStub).
+api:
+  - func TestProposeSuccess(t *testing.T)
+  - func TestProposeFailClosed(t *testing.T)
+  - func TestProposeRequestShape(t *testing.T)
+  - func TestClaudeDecideZeroTrust(t *testing.T)
+  - "var _ model.Proposer = claude.Claude{}   // compile-time interface assertion"
+prelude: "A fakeAPI(t, status, body) helper starts an httptest.Server whose handler records the last request body and replies with (status, body) at POST /v1/messages; New(model, option.WithBaseURL(srv.URL), option.WithAPIKey(\"test\")) points the adapter at it. A msgJSON(model, text, stop) helper builds a canonical Messages API response body."
+behavior:
+  - "SUCCESS + PROVENANCE: server returns a 200 with one text block \"restart\", served model \"claude-opus-4-8\", stop_reason end_turn. Propose(ctx, Request{Input:\"act\"}) returns Value==\"restart\", Model==\"claude:claude-opus-4-8\", nil error. A response with two text blocks concatenates them in order. Two identical calls return equal Proposals (determinism)."
+  - "FAIL CLOSED: a 400 response makes Propose return a non-nil error and a zero Proposal (Value==\"\"). A 200 response whose stop_reason is \"refusal\" likewise returns a non-nil error and a zero Proposal - never an empty-but-nil success."
+  - "REQUEST SHAPE (capture the sent body): with Request{System:\"be terse\", Input:\"do it\"}, the recorded request JSON contains the user text \"do it\" and the system text \"be terse\", and does NOT contain the substring \"temperature\" (nor \"top_p\"/\"top_k\"). With an empty Claude{}.Model, the recorded body's model is \"claude-opus-4-8\" (DefaultModel); with Model set to anthropic.ModelClaudeHaiku4_5 the body's model is the haiku id."
+  - "ZERO-TRUST COMPOSITION (ties to U9): build the sampleRecipe from the model package's pattern (propose action + authoritative sink under a set rule {restart,...} + benign log). With a Claude proposer whose fake server returns \"restart\", model.Decide(ctx, recipe, rh, claudeProposer, req) yields Decision.Result reflect.DeepEqual to stag.Eval(recipe, \"restart\", rh) AND reflect.DeepEqual to Decide(...) with a LocalStub{Default:\"restart\"} - the verdict is identical whether the value came from Claude or the stub. With the fake server returning a non-member value, both compose to Deny. Decision.Proposal.Model is the claude provenance, distinct from the stub's, yet the Result is the same - provenance carried, never authorizing."
+  - "INTERFACE: the file includes var _ model.Proposer = claude.Claude{} so a signature drift fails the build."
+constraints: package claude_test (external test, exercising the public surface); depends on the claude package, the model package, the stag root, github.com/anthropics/anthropic-sdk-go (+ /option) for the model constants and option.WithBaseURL, net/http, net/http/httptest, reflect, strings, context, testing.

@@ -1,0 +1,23 @@
+recipe: k8s_scale_policy
+version: 1
+# Graded scaling authority (coarse single-arg: gated arg = replicas):
+#   <=5 auto-allow · 6..20 escalate (needs approval) · >20 deny.
+rules:
+  scale.auto: {kind: numeric_range, min: 0, max: 5}
+  scale.review: {kind: numeric_range, min: 6, max: 20}
+  scale.blocked: {kind: numeric_range, min: 0, max: 0}
+steps:
+  - {id: propose_n, kind: propose, out: count}
+  - id: route
+    kind: branch
+    in: count
+    cases:
+      - {rule: scale.auto, goto: apply}
+      - {rule: scale.review, goto: reviewgate}
+    default: block
+  - {id: apply, kind: sink, in: count, field: k8s.scale.apply, sensitivity: authoritative, rule: scale.auto, actor: "policy:platform", goto: exit_ok}
+  - {id: exit_ok, kind: exit}
+  - {id: block, kind: sink, in: count, field: k8s.scale.blocked, sensitivity: authoritative, rule: scale.auto, actor: "policy:platform", goto: exit_deny}
+  - {id: exit_deny, kind: exit}
+  - {id: reviewgate, kind: gate, in: count, rule: scale.blocked, on_fail: escalate}
+  - {id: exit_esc, kind: exit}

@@ -1,0 +1,15 @@
+recipe: k8s_read_policy
+version: 1
+# Read-only v1: cluster reads are non-mutating, so they auto-allow (a benign sink crosses
+# nothing authoritative). Coarse single-arg — the gated arg is `namespace`. When we add
+# mutating tools, they get their own recipes (namespace set_membership, replica ranges,
+# hard-deny on destructive verbs) — this one stays the safe read path.
+steps:
+  - id: propose_ns
+    kind: propose
+    out: ns
+  - id: read
+    kind: sink
+    in: ns
+    field: k8s.read
+    sensitivity: benign

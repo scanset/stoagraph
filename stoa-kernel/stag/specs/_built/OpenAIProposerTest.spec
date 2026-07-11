@@ -1,0 +1,17 @@
+name: OpenAIProposerTest
+role: test
+intent: Verify the OpenAI-compatible adapter against a FAKE /v1/chat/completions server (httptest) - deterministic, offline, exercising the real HTTP+JSON round-trip the same way ollama/OpenRouter/OpenAI would. Prove: it implements model.Proposer; it maps a chat completion to an untrusted Proposal with honest provenance; it fails closed on HTTP errors, content-filter refusals, and empty/malformed bodies; it never sends temperature and does send the Authorization bearer; and - the load-bearing tie to U9 - composed via model.Decide it confers zero trust (verdict == Eval of the value, identical to a LocalStub and to the Claude adapter).
+api:
+  - func TestProposeSuccess(t *testing.T)
+  - func TestProposeFailClosed(t *testing.T)
+  - func TestProposeRequestShape(t *testing.T)
+  - func TestOpenAIDecideZeroTrust(t *testing.T)
+  - "var _ model.Proposer = openai.Client{}   // compile-time interface assertion"
+prelude: "A fakeAPI(t, status, body) helper starts an httptest.Server whose handler records the last request body + Authorization header and replies (status, body) to any POST; the Client's BaseURL is set to srv.URL+\"/v1\" and APIKey to \"k\". A chatJSON(model, content, finish) helper builds a canonical chat.completion response body."
+behavior:
+  - "SUCCESS + PROVENANCE: server returns 200 with choices[0].message.content \"restart\", served model \"qwen3-coder\", finish_reason \"stop\". Propose(ctx, Request{Input:\"act\"}) returns Value==\"restart\", Model==\"openai:qwen3-coder\", nil. Two identical calls return equal Proposals (determinism). A response with finish_reason \"length\" still returns its content (truncated is fail-safe, not an error). A response that omits the model field yields Model==\"openai:\"+c.Model."
+  - "FAIL CLOSED: each returns a non-nil error AND a zero Proposal (Value==\"\") - a 500 status; a 200 whose choices array is empty; a 200 whose first choice finish_reason is \"content_filter\"; a 200 with an undecodable (non-JSON) body. Never an empty-but-nil success."
+  - "REQUEST SHAPE (capture the sent body + headers): with Request{System:\"be terse\", Input:\"do it\"}, MaxTokens 32, the recorded JSON contains the user content \"do it\", the system content \"be terse\", the model id, and \"max_tokens\":32, and does NOT contain \"temperature\"/\"top_p\"/\"top_k\". The recorded Authorization header is \"Bearer k\". With an empty System the body has no system message. With APIKey \"\" no Authorization header is sent."
+  - "ZERO-TRUST COMPOSITION (ties to U9/U10): build the sampleRecipe (propose action + authoritative sink under a set rule {restart,...} + benign log). With an OpenAI client whose fake server returns \"restart\", model.Decide(ctx, recipe, rh, client, req) yields Decision.Result reflect.DeepEqual to stag.Eval(recipe, \"restart\", rh) AND to Decide(...) with a LocalStub{Default:\"restart\"}. With the server returning a non-member value, both compose to Deny. Decision.Proposal.Model is the openai provenance, distinct from the stub's, yet the Result is identical - provenance carried, never authorizing."
+  - "INTERFACE: the file includes var _ model.Proposer = openai.Client{} so a signature drift fails the build."
+constraints: package openai_test (external test); depends on the openai package, the model package, the stag root, net/http, net/http/httptest, reflect, strings, context, testing. No third-party dependency.

@@ -1,0 +1,17 @@
+recipe: zt_diag_policy
+version: 1
+rules:
+  diag.allowed:
+    kind: set_membership
+    set: ["ping", "status", "restart"]
+steps:
+  - id: propose_cmd
+    kind: propose
+    out: cmd
+  - id: run
+    kind: sink
+    in: cmd
+    field: ops.diagnostic
+    sensitivity: authoritative
+    rule: diag.allowed
+    actor: "policy:ops"

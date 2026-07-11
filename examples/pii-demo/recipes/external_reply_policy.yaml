@@ -1,0 +1,17 @@
+recipe: external_reply_policy
+version: 1
+rules:
+  reply.templates:
+    kind: set_membership
+    set: ["tmpl:account_unlocked", "tmpl:password_reset_sent", "tmpl:ticket_escalated", "tmpl:looking_into_it"]
+steps:
+  - id: propose_body
+    kind: propose
+    out: body
+  - id: send
+    kind: sink
+    in: body
+    field: outbound.email.body
+    sensitivity: authoritative
+    rule: reply.templates
+    actor: "policy:outbound_comms"

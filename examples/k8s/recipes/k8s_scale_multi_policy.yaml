@@ -1,0 +1,40 @@
+recipe: k8s_scale_multi_policy
+version: 1
+# MULTI-ARG: gates on namespace AND replicas together (route gateArg = "namespace,replicas").
+#   prod          -> any scale ESCALATES (needs approval), regardless of count
+#   dev/staging   -> <=5 auto · 6..20 escalate · >20 deny
+#   other namespaces -> deny
+# Each `propose out: X` binds the tool arg named X (EvalArgs).
+rules:
+  ns.safe: {kind: set_membership, set: ["dev", "staging"]}
+  ns.prod: {kind: set_membership, set: ["prod"]}
+  scale.auto: {kind: numeric_range, min: 0, max: 5}
+  scale.review: {kind: numeric_range, min: 6, max: 20}
+  never: {kind: set_membership, set: ["__never__"]}
+steps:
+  - {id: propose_ns, kind: propose, out: namespace}
+  - {id: propose_count, kind: propose, out: replicas}
+  - id: ns_route
+    kind: branch
+    in: namespace
+    cases:
+      - {rule: ns.safe, goto: count_route}
+      - {rule: ns.prod, goto: prod_esc}
+    default: ns_deny
+  - id: count_route
+    kind: branch
+    in: replicas
+    cases:
+      - {rule: scale.auto, goto: apply}
+      - {rule: scale.review, goto: count_esc}
+    default: count_deny
+  - {id: apply, kind: sink, in: replicas, field: k8s.scale.apply, sensitivity: authoritative, rule: scale.auto, actor: "policy:platform", goto: exit_ok}
+  - {id: exit_ok, kind: exit}
+  - {id: ns_deny, kind: sink, in: namespace, field: k8s.scale.ns_blocked, sensitivity: authoritative, rule: ns.safe, actor: "policy:platform", goto: exit_nd}
+  - {id: exit_nd, kind: exit}
+  - {id: count_deny, kind: sink, in: replicas, field: k8s.scale.count_blocked, sensitivity: authoritative, rule: scale.auto, actor: "policy:platform", goto: exit_cd}
+  - {id: exit_cd, kind: exit}
+  - {id: prod_esc, kind: gate, in: namespace, rule: never, on_fail: escalate}
+  - {id: exit_pe, kind: exit}
+  - {id: count_esc, kind: gate, in: replicas, rule: never, on_fail: escalate}
+  - {id: exit_ce, kind: exit}

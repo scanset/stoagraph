@@ -1,0 +1,10 @@
+# Never let secrets or bulk into a build context (a COPY . would otherwise ship them in a layer).
+.env
+config/models.json
+data/
+logs/
+**/node_modules
+**/.next
+.git
+planning/
+transcripts/

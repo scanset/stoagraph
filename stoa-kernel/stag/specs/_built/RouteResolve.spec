@@ -1,0 +1,15 @@
+name: RouteResolve
+role: component
+intent: Resolve the persisted route table (Planning/18) into a live proxy.Router - the step that makes the gate MULTI-TOOL, driven by saved bindings. A stored route binds a tool to a recipe BY NAME + a gated arg; Build loads each named recipe and parses it into the kernel form (stag.Recipe + semantic hash), producing a proxy.Router the gate uses. THE LOAD-BEARING PROPERTY (fail closed): a route whose recipe is MISSING (loader error) or INVALID (does not parse) produces NO router entry and is reported as an error - so that tool is left UNROUTED, which the gate denies by default (U22). The router therefore never contains a broken or zero recipe; a bad binding can only cause a deny, never a mis-gate. Build is pure of everything except the injected recipe loader (no store/DB dependency), so it is trivially testable.
+api:
+  - "type Spec struct { Tool string; Recipe string; GateArg string }"
+  - "type RouteError struct { Tool string; Recipe string; Err string }"
+  - "type Resolved struct { Router proxy.Router; Errors []RouteError }"
+  - func Build(specs []Spec, loadRecipe func(name string) ([]byte, error)) Resolved
+concept: resolve stored tool->recipe-name bindings into a parsed proxy.Router; fail closed on a missing/invalid recipe (tool left unrouted -> denied); pure but for the injected loader.
+behavior:
+  - "BUILD RESOLVES VALID: for each Spec whose loadRecipe(name) returns recipe YAML that recipe.Parse accepts, Build sets Router[spec.Tool] = a proxy.Route with the parsed stag.Recipe, its semantic hash, and spec.GateArg. Several valid specs all land in the Router, keyed by Tool. Resolved.Errors excludes them."
+  - "FAIL CLOSED ON A BAD RECIPE: a Spec whose loadRecipe returns an error (recipe missing), or whose bytes do NOT parse (recipe.Parse errors), yields NO Router entry for that Tool and one Resolved.Errors entry {Tool, Recipe, Err = the reason}. The tool is left unrouted; downstream the gate denies an unrouted tool. A valid Spec alongside a bad one is still routed - one bad binding does not poison the others."
+  - "DETERMINISTIC + PURE: Build performs I/O only through the injected loadRecipe; given the same specs and loader it returns an equal Resolved (recipe.Parse is deterministic). It never panics on any input (nil/empty specs -> empty Router and no Errors; nil loader is a caller bug, not handled). A duplicate Tool across specs resolves last-wins (map assignment)."
+  - "NEVER A ZERO RECIPE IN THE ROUTER: every entry in Resolved.Router corresponds to a recipe that recipe.Parse accepted; Build does not insert an entry with a zero-value stag.Recipe. (This is the property the gate relies on: a routed tool always has a real, parsed policy.)"
+constraints: package router at workspaces/stag/router (public; import path github.com/scanset/StAG/router). Depends on the proxy package (Route, Router), the recipe package (Parse), the stag root (Recipe), and stdlib (nothing else required). NO dependency on store or recipestore - the caller injects loadRecipe (e.g. recipestore.Store.Get) and maps store.Route -> Spec, keeping this package decoupled and DB-free.

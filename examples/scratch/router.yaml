@@ -1,0 +1,31 @@
+recipe: router
+version: 1
+rules:
+  route.esc:
+    kind: set_membership
+    set: ["delete_all", "shutdown", "wipe"]
+  route.normal:
+    kind: set_membership
+    set: ["restart", "scale"]
+steps:
+  - id: propose_action
+    kind: propose
+    out: action
+  - id: route
+    kind: branch
+    in: action
+    cases:
+      - rule: route.normal
+        goto: normal_sink
+      - rule: route.esc
+        goto_recipe: escalate_policy
+    default: noop
+  - id: normal_sink
+    kind: sink
+    in: action
+    field: mcp.exec.normal
+    sensitivity: authoritative
+    rule: route.normal
+    actor: "policy:normal"
+  - id: noop
+    kind: exit

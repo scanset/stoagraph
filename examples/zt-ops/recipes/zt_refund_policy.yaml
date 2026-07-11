@@ -1,0 +1,55 @@
+recipe: zt_refund_policy
+version: 1
+rules:
+  refund.auto:
+    kind: numeric_range
+    min: 0
+    max: 50
+  refund.review:
+    kind: numeric_range
+    min: 51
+    max: 5000
+  refund.blocked:
+    kind: numeric_range
+    min: 0
+    max: 0
+steps:
+  - id: propose_amount
+    kind: propose
+    out: amount
+  - id: route
+    kind: branch
+    in: amount
+    cases:
+      - rule: refund.auto
+        goto: apply
+      - rule: refund.review
+        goto: reviewgate
+    default: block
+  - id: apply
+    kind: sink
+    in: amount
+    field: finance.refund.apply
+    sensitivity: authoritative
+    rule: refund.auto
+    actor: "policy:finance"
+    goto: exit_ok
+  - id: exit_ok
+    kind: exit
+  - id: block
+    kind: sink
+    in: amount
+    field: finance.refund.blocked
+    sensitivity: authoritative
+    rule: refund.auto
+    actor: "policy:finance"
+    goto: exit_deny
+  - id: exit_deny
+    kind: exit
+  - id: reviewgate
+    kind: gate
+    in: amount
+    rule: refund.blocked
+    on_fail: escalate
+  - id: exit_esc
+    kind: exit

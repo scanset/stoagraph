@@ -1,0 +1,18 @@
+name: Actuator
+role: component
+intent: The actuator boundary (runtime, unit 4) - the last enforcement hop, where a gated decision becomes a real effect (or does not). An Actuator executes a cleared authoritative effect; a Registry binds a sink field to its actuator; and FireCleared is the complete-mediation gate at the actuator boundary. THE LOAD-BEARING PROPERTY: FireCleared fires an actuator IFF the action is in Decision.Cleared - it iterates ONLY dec.Cleared and NEVER dec.Denied or dec.Recommend, so nothing touches the real environment without a cleared decision, even if a denied/recommended action names a bound actuator. This is invariant 10 (complete mediation) at the point where the gate meets the world: no effect fires that the gate did not clear. v1 actuators are STUBS that describe the intended effect and touch nothing (matching the ZT-reference stubbed actuators); real actuators (command/HTTP/MCP tool call) plug in behind the interface. v1 fires each cleared authoritative sink with the single proposal value (the crossing value); per-sink distinct values are a later refinement when a recipe binds multiple slots.
+api:
+  - "type Actuator interface { Fire(ctx context.Context, value string) (string, error) }"
+  - "type Stub struct { Name string }"
+  - func (s Stub) Fire(ctx context.Context, value string) (string, error)
+  - "type Registry map[string]Actuator"
+  - "type Result struct { Ref string; Value string; Fired bool; Output string; Err string }"
+  - func FireCleared(ctx context.Context, reg Registry, dec broker.Decision) []Result
+concept: complete mediation at the actuator boundary; fire iff cleared; the PEP actuator; stub effects.
+behavior:
+  - "STUB: Stub.Fire(ctx, value) returns a descriptive line naming the stub and the value (e.g. containing s.Name and the value) and a nil error; it touches nothing in the environment. It is the v1 effect for every field - a demo logs it; nothing real happens."
+  - "FIRE-CLEARED = COMPLETE MEDIATION: FireCleared iterates dec.Cleared ONLY. For each cleared Action a, it looks up reg[a.Ref]; if an actuator is bound it calls Fire(ctx, dec.Proposal.Value) and records Result{Ref:a.Ref, Value:the proposal value, Fired:true, Output:the returned line, Err:the error string or \"\"}; if no actuator is bound it records Result{Ref:a.Ref, Fired:false} (a cleared authoritative sink with no bound effect is a no-op, noted, not an error). It returns one Result per cleared action, in order."
+  - "NEVER FIRES DENIED OR RECOMMENDED: FireCleared NEVER reads dec.Denied or dec.Recommend and NEVER fires an actuator for an action that is not in dec.Cleared - even when a denied or recommended action's Ref matches a bound actuator. This is the load-bearing property: the gate's Cleared list is the sole gate on real effects; a Deny or an Escalate can never cause an effect."
+  - "AN ACTUATOR ERROR IS SURFACED, NOT SWALLOWED: if a bound actuator returns an error, its Result has Fired:true and Err set to the error string; FireCleared still processes the remaining cleared actions (one failing effect does not drop the others) and never panics."
+  - "DETERMINISTIC / PURE OF ENVIRONMENT: with stub actuators, FireCleared on the same Decision returns equal Results; the actuator layer adds no nondeterminism and (with stubs) no side effects."
+constraints: package actuator at workspaces/stag/actuator (public; import path github.com/scanset/StAG/actuator). Depends on the broker package (Decision, Action) and stdlib (context, fmt). No network, no environment reads in the stub; real actuators add their own I/O behind the interface.

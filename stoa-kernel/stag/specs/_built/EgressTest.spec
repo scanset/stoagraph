@@ -1,0 +1,17 @@
+name: EgressTest
+role: test
+intent: Verify the hash-chained JSONL egress log: Record chains each leaf, Verify accepts an honest log and rejects every tamper (edited field, rewritten hash, changed prev_hash, reorder, drop, corrupt bytes), Head/Count track, Record fails closed on a write error (no head/seq advance), and Resume continues a chain. A fuzz drives arbitrary event sequences AND a flip position, asserting the honest log verifies with matching head/count, is deterministic, and that flipping ANY single byte makes Verify reject - chain integrity as complete mediation of the audit trail.
+api:
+  - func TestRecordAndVerify(t *testing.T)
+  - func TestVerifyRejectsTamper(t *testing.T)
+  - func TestWriteErrorFailClosed(t *testing.T)
+  - func TestResume(t *testing.T)
+  - func FuzzChainIntegrity(f *testing.F)
+prelude: "A helper builds a small slice of stag.ReleaseEvents with varied fields. A failWriter is an io.Writer that returns an error after N successful writes, to drive the fail-closed path. Tests record events to a bytes.Buffer via NewJSONLSink and read them back with Verify."
+behavior:
+  - "RECORD AND VERIFY: record 3 distinct events to a buffer. Verify(buffer) returns a nil error, Count 3, and Head equal to the sink's Head(). The buffer has exactly 3 newline-delimited JSON lines; leaf 0 has Seq 0 and PrevHash \"\" (GenesisHash); each later leaf's PrevHash equals the previous leaf's Hash. An empty sink (no records) produces an empty buffer; Verify returns {Head: GenesisHash, Count: 0}, nil."
+  - "VERIFY REJECTS TAMPER (table): starting from an honest 3-leaf log, each mutation makes Verify return a non-nil error: (a) edit a byte inside an event field of leaf 1; (b) overwrite leaf 1's Hash with leaf 0's Hash; (c) swap leaf 1 and leaf 2 (reorder); (d) delete leaf 1 (drop); (e) duplicate leaf 1 (insert); (f) replace a line with non-JSON garbage; (g) change leaf 0's PrevHash to a non-empty value. Each case asserts err != nil."
+  - "WRITE ERROR FAIL-CLOSED: a sink over a failWriter that errors on the 2nd write. Record #1 succeeds (Head advances, Count 1). Record #2 returns a non-nil error, and afterwards Head and Count are UNCHANGED from after Record #1 (no advance on a failed write). A later Record over a now-working writer continues the chain from the correct head."
+  - "RESUME: record 2 events to buffer A via NewJSONLSink; capture Verify(A) = {head, count:2}. Create ResumeJSONLSink(bufferB, head, 2) and record 1 more event. Verify over the concatenation A+B returns nil error, Count 3, and a Head equal to the resumed sink's Head(). Verify(B alone) fails (its first leaf has Seq 2, not 0) - confirming B is a continuation, not a standalone chain."
+  - "FUZZ FuzzChainIntegrity(data []byte, pos uint16): build 0..5 events from data (varying string fields, including arbitrary/invalid-UTF8 bytes). Record them to a buffer via a sink. ASSERT: (1) Verify(buffer) is nil-error with Head == sink.Head() and Count == number of events; (2) recording the same events to a second sink yields byte-identical output (determinism); (3) if the buffer is non-empty, copy it, flip one byte at index pos%len (b[i] ^= 0xFF), and Verify of the tampered copy returns a NON-nil error (any single-byte change breaks the chain); (4) Verify never panics. Seed with empty, one event, and several events."
+constraints: package egress_test (external test); depends on the egress package, the stag root (ReleaseEvent, GenesisHash via egress), and stdlib (bytes, context, encoding/json, errors, strings, testing). No network, no keys.

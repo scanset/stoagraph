@@ -1,0 +1,43 @@
+[
+  {
+    "id": "k8s-incident",
+    "match": {
+      "source": "pagerduty"
+    },
+    "recipe": "k8s_scale_approval_policy",
+    "tools": [
+      "get_pods",
+      "get_events",
+      "describe_pod",
+      "get_deployments",
+      "restart_deployment",
+      "scale_deployment"
+    ],
+    "context": [
+      "k8s-kb"
+    ]
+  },
+  {
+    "id": "traffic-spike",
+    "match": {
+      "event.type": "traffic.spike",
+      "source": "monitoring"
+    },
+    "recipe": "k8s_scale_approval_policy"
+  },
+  {
+    "id": "k8s-scale-request",
+    "match": {
+      "kind": "k8s.scale"
+    },
+    "recipe": "k8s_scale_approval_policy"
+  },
+  {
+    "id": "support-ticket",
+    "match": {
+      "source": "zendesk"
+    },
+    "recipe": "",
+    "route": "model"
+  }
+]

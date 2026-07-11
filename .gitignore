@@ -1,0 +1,41 @@
+# StoaGraph (github.com/scanset/stoagraph)
+#
+# EVERYTHING IN THIS REPO IS RELEASABLE. There is no open/commercial split: the gate, the
+# orchestrator, both consoles, the examples and the recipe library all ship. The ONLY things
+# excluded below are (1) secrets, (2) regenerable runtime state, and (3) build artifacts.
+#
+# Nothing here may exclude source. Note the trap this file already fell into once: a pattern like
+# `/stoa-kernel/harness` (meant for a compiled binary) also matches `stoa-kernel/harness/` — the
+# ORCHESTRATOR'S SOURCE DIRECTORY — and silently swallowed 19 .go files. Never add a bare binary
+# name that collides with a source dir. Build to bin/ instead.
+
+# --- 1. secrets (NEVER commit) ---
+# Provider API keys for the orchestrator's models. The gate holds none; only the orchestrator does.
+models.json
+# Control-plane role tokens (admin / approve / dispatch / operator) — generated 0600 on first start.
+control.tokens
+*.tokens
+# The ed25519 key that signs approval releases.
+approval.key
+*.key
+!*.pub.key
+.env
+.env.local
+
+# --- 2. runtime state (regenerated; belongs in a volume, not in git) ---
+/data/
+/logs/
+*.db
+*.sqlite
+*.jsonl
+
+# --- 3. build artifacts ---
+# Binaries go in bin/ (`go build -o bin/ ./cmd/...`), so no bare names can collide with source dirs.
+/stoa-kernel/bin/
+dist/
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+.DS_Store

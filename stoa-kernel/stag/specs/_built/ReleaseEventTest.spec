@@ -1,0 +1,14 @@
+name: ReleaseEventTest
+role: test
+intent: Verify the ReleaseEvent record is TAMPER-EVIDENT (any single-field change changes the hash) and STABLE (same event -> same hash), and that its canonical form is LEGIBLE (trust classes rendered by name, keyed by the nine snake_case dimensions). The record's whole value as attestation is that it cannot be altered without changing its hash, so the test drives every one of the nine fields and asserts single-field sensitivity.
+api:
+  - func TestReleaseEvent(t *testing.T)
+  - func FuzzReleaseEvent(f *testing.F)
+behavior:
+  - "STABLE: a fixed ReleaseEvent hashes to the same string across repeated Hash() calls, each with a nil error; the hash matches ^[0-9a-f]{64}$."
+  - "LEGIBLE CANONICAL FORM (pins the shape): for a base event, e.Hash() equals CanonicalHash(map[string]any{ \"subject_class\": e.SubjectClass.String(), \"subject_origin\": e.SubjectOrigin, \"collected_field\": e.CollectedField, \"target_class\": e.TargetClass.String(), \"target_field\": e.TargetField, \"authorizing_rule\": e.AuthorizingRule, \"actor\": e.Actor, \"ordering\": e.Ordering, \"recipe_hash\": e.RecipeHash }) - so the nine field names, the class NAMES (not ints), and int64 ordering are all pinned. The base event's RecipeHash is a realistic 64-hex value."
+  - "SENSITIVE PER FIELD (tamper-evidence): from a base event, table-drive nine mutated copies, each changing exactly ONE field (SubjectClass, SubjectOrigin, CollectedField, TargetClass, TargetField, AuthorizingRule, Actor, Ordering, RecipeHash - the RecipeHash mutation is a ONE-CHARACTER edit). Assert every mutated event's Hash() differs from the base's. (A change the class String() cannot distinguish must still change the hash - e.g. SubjectClass Untrusted->Caller.)"
+  - "EMPTY RECIPE HASH: the base event with RecipeHash=\"\" hashes with nil error, is stable, and differs from the same event with the non-empty RecipeHash (an event missing its recipe binding is itself tamper-evident)."
+  - "OUT-OF-SET CLASS: an event with SubjectClass=TrustClass(99) renders \"unknown\" in the canonical form, hashes with a nil error, is stable, and is distinct from the same event with an in-set SubjectClass."
+  - "FUZZ FuzzReleaseEvent: fuzz the six string fields (origin, collectedField, targetField, rule, actor, recipeHash), the int64 ordering, and two bytes sc,tc mapped to TrustClass(sc%4) and TrustClass(tc%4) (byte%4 exercises an out-of-set class). Build the base event. Assert Hash() is STABLE (two calls equal; a second independently-built identical event hashes equal), returns a nil error, and is 64 hex chars. Then change ONE field - ordering to ordering+1 when ordering != MaxInt64 (guard overflow), and separately recipeHash to recipeHash+\"x\" - and assert the hash DIFFERS each time (single-field sensitivity). A crash or a collision on a real single-field change is a tamper-evidence bug."
+constraints: package main; standard library only (testing).

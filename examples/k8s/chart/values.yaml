@@ -1,0 +1,18 @@
+# A minimal, dependency-free sample workload. Override per install, e.g.:
+#   helm install web ./chart -n dev     --create-namespace
+#   helm install web ./chart -n staging --create-namespace --set replicaCount=3
+#   helm install web ./chart -n prod    --create-namespace --set replicaCount=4
+name: web
+replicaCount: 2
+image: nginx:1.27-alpine
+containerPort: 80
+service:
+  enabled: true
+  port: 80
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi

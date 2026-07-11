@@ -1,0 +1,11 @@
+recipe: zt_read_policy
+version: 1
+steps:
+  - id: propose_uid
+    kind: propose
+    out: uid
+  - id: read
+    kind: sink
+    in: uid
+    field: internal.user_lookup
+    sensitivity: benign
