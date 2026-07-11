@@ -1,11 +1,27 @@
 # Docker
 
 ```bash
-tools/gen-env.sh      # mint the four control-plane role secrets into .env (0600, gitignored)
-docker compose up -d  # six containers
-tools/demo.sh         # author the policy + wire the tools
-open http://localhost:3000
+stoagraph up      # mints the four role secrets, pulls the signed images, starts
+stoagraph demo    # loads the containment demo
 ```
+
+`compose.yml` is **pull-only** — it references published images and nothing on your disk, so it works
+for someone who never cloned the repo. In a clone, `compose.override.yml` is merged automatically and
+adds the `build:` blocks, so `docker compose build` still builds from source.
+
+Doing it by hand:
+
+```bash
+tools/gen-env.sh && docker compose up -d && tools/demo.sh
+```
+
+## Why there is no `docker run` one-liner
+
+The control plane uses **per-role secrets**, and `approve` — the token that releases a held action —
+must never reach the orchestrator's environment. Something has to mint four distinct secrets and give
+each service only what it is entitled to, *before anything starts*. That is the step a single
+`docker run` cannot do, and it is precisely the thing we made impossible to shortcut. `stoagraph up`
+does it and gets out of the way.
 
 Six containers, two Dockerfiles:
 

@@ -67,14 +67,33 @@ separate credential it is never given. An orchestrator able to approve its own e
 the human gate decorative, and every test would still pass. So the roles are separate secrets and the
 gate enforces the split. See [SECURITY.md](SECURITY.md).
 
-## Quickstart
+## Install
 
 ```bash
-tools/gen-env.sh          # mint the four control-plane role secrets
-docker compose up -d      # six containers (incl. an example tool server)
-tools/demo.sh             # author the policy + wire the tools
-open http://localhost:3000
+curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.1.0/install.sh | sh
+stoagraph up      # mints your control-plane role secrets, pulls the signed images, starts
+stoagraph demo    # loads the containment demo — no model, no API key
 ```
+
+Piping a script into your shell, from a product that says *"don't trust — verify"*? Fair. So:
+`install.sh` lives **in this repo at the tag it installs** (what you read is what runs), it
+**verifies the SHA-256** of the binary against published, cosign-signed checksums before executing
+anything, and it prints the `cosign verify` commands for the images. Read it first if you like —
+we would:
+
+```bash
+curl -sSLO https://raw.githubusercontent.com/scanset/stoagraph/v0.1.0/install.sh
+less install.sh && sh install.sh
+```
+
+Already have Go? `go install github.com/scanset/stoagraph/stoa-kernel/cmd/stoagraph@latest`
+
+<details><summary>From source</summary>
+
+```bash
+tools/gen-env.sh && docker compose up -d && tools/demo.sh
+```
+</details>
 
 **No model or API key required to see the point:**
 

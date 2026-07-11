@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call: # the release workflow reuses this: nothing ships that has not passed the same gate
 
 permissions:
   contents: read

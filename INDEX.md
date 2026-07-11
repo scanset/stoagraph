@@ -440,3 +440,8 @@ Command stag-proxy is the standing gating MCP server — the front door an agent
 Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It loads a policy recipe, builds a proxy.Gate that records cleared crossings to a hash-chained egress l
 
 **kw:** cmd · stag-serve · http · api · console · backend · gating · proxy · decide · log
+
+### `stoa-kernel/cmd/stoagraph/main.go`
+Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up      mint the role secrets, pull the signed images, start, print 
+
+**kw:** cli · installer · launcher · up · down · demo · tokens · compose · ghcr · role-secrets · mint · no-shortcut

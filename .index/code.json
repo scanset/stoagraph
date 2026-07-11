@@ -148,6 +148,27 @@
       "symbols": []
     },
     {
+      "doc": "Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up      mint the role secrets, pull the signed images, start, print ",
+      "keywords": [
+        "cli",
+        "installer",
+        "launcher",
+        "up",
+        "down",
+        "demo",
+        "tokens",
+        "compose",
+        "ghcr",
+        "role-secrets",
+        "mint",
+        "no-shortcut"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stoagraph/main.go",
+      "symbols": []
+    },
+    {
       "doc": "Package agent is the orchestrator's tool-use loop: a model proposes tool calls, each is routed THROUGH stag-proxy (which gates it), and results feed back. The model is the untrusted proposer; stag decides what is allowed",
       "keywords": [
         "agent",

@@ -1,0 +1,39 @@
+# Contributor override — Compose merges this automatically when it is next to compose.yml.
+#
+# compose.yml alone is PULL-ONLY, so a user who never cloned the repo can run it. This file adds the
+# `build:` blocks, so in a clone `docker compose build` builds from source and `up` uses what you built.
+# It is not shipped in a release.
+
+x-gate-build: &gate-build
+  context: .
+  dockerfile: Dockerfile
+
+services:
+  stag-serve:
+    build:
+      <<: *gate-build
+      args: [CMD=stag-serve]
+  stag-proxy:
+    build:
+      <<: *gate-build
+      args: [CMD=stag-proxy]
+  harness-serve:
+    build:
+      <<: *gate-build
+      args: [CMD=harness-serve]
+  kbserve:
+    build:
+      <<: *gate-build
+      args: [CMD=kbserve]
+  console:
+    build:
+      context: ./frontend
+      args:
+        # Baked in at build time (Next inlines NEXT_PUBLIC_*). These are the addresses the BROWSER
+        # will call — not the compose service names, which a browser cannot resolve.
+        NEXT_PUBLIC_API_BASE: ${PUBLIC_GATE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_HARNESS_API: ${PUBLIC_HARNESS_URL:-http://localhost:8090}
+  pii-demo:
+    build:
+      <<: *gate-build
+      args: [CMD=example-pii]

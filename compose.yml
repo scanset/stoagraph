@@ -20,22 +20,24 @@
 #   kbserve        (none)                        a context provider; it has no control plane
 #   console        (none)                        the human types their token into the browser
 #
-# Generate the secrets once:  tools/gen-env.sh    (writes .env, gitignored)
+# THIS FILE IS PULL-ONLY. It references published, signed images and NOTHING on your disk, so it works
+# for someone who has never cloned the repo. Contributors get `compose.override.yml` alongside it, which
+# Compose merges automatically and which adds the `build:` blocks — so `docker compose build` still
+# builds from source in a clone, and a user's `docker compose up` never tries to build a directory they
+# do not have.
+#
+# Generate the secrets once:  tools/gen-env.sh   (or: stoagraph up)
+#
+# Pin a version with STOAGRAPH_VERSION=v0.1.0; the default is :latest.
 
 name: stoagraph
-
-x-gate-build: &gate-build
-  context: .
-  dockerfile: Dockerfile
 
 services:
   # ---------------------------------------------------------------- THE GATE
   # Deterministic policy, audit, approvals. Holds no model and no API keys — enforced by
   # stoa-kernel/architecture_test.go, which fails the build if a gate package imports orchestrator code.
   stag-serve:
-    build:
-      <<: *gate-build
-      args: [CMD=stag-serve]
+    image: ghcr.io/scanset/stoagraph/stag-serve:${STOAGRAPH_VERSION:-latest}
     command: ["-addr", ":8080", "-tokens", ""] # -tokens "" => env only; no secrets file on disk
     environment:
       STAG_ADMIN_TOKEN: ${STAG_ADMIN_TOKEN:?run tools/gen-env.sh}
@@ -56,9 +58,7 @@ services:
   # The MCP gating proxy. Sessions are bound to a recipe HERE, by the trusted dispatcher.
   # It waits for a downstream to be registered rather than crash-looping on a fresh instance.
   stag-proxy:
-    build:
-      <<: *gate-build
-      args: [CMD=stag-proxy]
+    image: ghcr.io/scanset/stoagraph/stag-proxy:${STOAGRAPH_VERSION:-latest}
     command: ["-http", ":8091", "-tokens", ""]
     environment:
       STAG_DISPATCH_TOKEN: ${STAG_DISPATCH_TOKEN:?run tools/gen-env.sh}
@@ -78,9 +78,7 @@ services:
   # ------------------------------------------------------- THE ORCHESTRATOR
   # This is where the model API KEYS live. Note what it is NOT given below.
   harness-serve:
-    build:
-      <<: *gate-build
-      args: [CMD=harness-serve]
+    image: ghcr.io/scanset/stoagraph/harness-serve:${STOAGRAPH_VERSION:-latest}
     command:
       [
         "-addr",
@@ -121,9 +119,7 @@ services:
   # An example context provider. The gate proxies it and stamps its output untrusted at origin, so the
   # EMBEDDER lives out here and the gate stays model-free.
   kbserve:
-    build:
-      <<: *gate-build
-      args: [CMD=kbserve]
+    image: ghcr.io/scanset/stoagraph/kbserve:${STOAGRAPH_VERSION:-latest}
     command: ["-addr", ":8095", "-kb-dir", "examples/k8s/kb", "-embed-base", "${OLLAMA_URL:-http://host.docker.internal:11434}/v1"]
     volumes:
       - ./examples:/app/examples:ro
@@ -140,13 +136,7 @@ services:
   # ------------------------------------------------------------ THE CONSOLE
   # Holds no secret at build or run time. The human pastes their token into the browser.
   console:
-    build:
-      context: ./frontend
-      args:
-        # Baked in at build time (Next inlines NEXT_PUBLIC_*). These are the addresses the BROWSER
-        # will call — not the compose service names, which a browser cannot resolve.
-        NEXT_PUBLIC_API_BASE: ${PUBLIC_GATE_URL:-http://localhost:8080}
-        NEXT_PUBLIC_HARNESS_API: ${PUBLIC_HARNESS_URL:-http://localhost:8090}
+    image: ghcr.io/scanset/stoagraph/console:${STOAGRAPH_VERSION:-latest}
     ports: ["3000:3000"]
     depends_on: [stag-serve, harness-serve]
     restart: unless-stopped
@@ -161,9 +151,7 @@ services:
   # Note it speaks streamable HTTP, not stdio: a distroless gate cannot spawn a subprocess, and we
   # would rather keep the gate minimal than bake an interpreter into it.
   pii-demo:
-    build:
-      <<: *gate-build
-      args: [CMD=example-pii]
+    image: ghcr.io/scanset/stoagraph/pii-demo:${STOAGRAPH_VERSION:-latest}
     command: ["-http", ":9000"]
     ports: ["9000:9000"]
     healthcheck:
