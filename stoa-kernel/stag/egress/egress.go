@@ -59,6 +59,16 @@ func ResumeJSONLSink(w io.Writer, head string, seq int64) *JSONLSink {
 	return &JSONLSink{w: w, seq: seq, head: head}
 }
 
+// DiscardSink implements the release Sink but records NOTHING. It is for callers that EVALUATE a
+// crossing without owning the audit chain — e.g. stag-serve's /api/decide, which answers "what would
+// the gate decide?" without enforcing. A hash-chained log admits exactly ONE writer (the enforcement
+// proxy); a second appender would fork the chain. Such callers read the log to display it and let the
+// proxy be the sole writer.
+type DiscardSink struct{}
+
+// kw: discard sink record nothing simulator no audit
+func (DiscardSink) Record(context.Context, stag.ReleaseEvent) error { return nil }
+
 // kw: record append chained leaf fail-closed no-advance-on-error
 func (s *JSONLSink) Record(_ context.Context, ev stag.ReleaseEvent) error {
 	s.mu.Lock()

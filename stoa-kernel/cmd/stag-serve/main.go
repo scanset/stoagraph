@@ -1,13 +1,13 @@
 // Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the
-// backend the Next.js console talks to. It loads a policy recipe, builds a
-// proxy.Gate that records cleared crossings to a hash-chained egress log, and
-// serves /api/decide, /api/log, /api/policies, /api/health.
+// backend the Next.js console talks to. It is the control plane and a recipe
+// SIMULATOR: /api/decide evaluates a proposed call without recording, and /api/log
+// READS the tamper-evident audit that the enforcement proxy (stag-proxy) writes.
+// Serves /api/decide, /api/log, /api/policies, /api/health.
 package main
 
 // file-kw: cmd stag-serve http api console backend gating proxy decide log
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"flag"
@@ -16,9 +16,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/scanset/stoagraph/stoa-kernel/stag/adapterauth"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/auth"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/egress"
+	"github.com/scanset/stoagraph/stoa-kernel/stag/oauth"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/mcpgate"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/recipe"
@@ -40,6 +43,8 @@ func main() {
 	// editor saves .yaml here). It lives under data/ with the config DB and the audit log.
 	recipesDir := flag.String("recipes-dir", "data/recipes", "recipe store (the gate reads + writes it)")
 	storePath := flag.String("store", "data/config.db", "SQLite config store (routes, adapters)")
+	oauthDir := flag.String("oauth-dir", "data/oauth", "per-server OAuth token store (shared with stag-proxy)")
+	publicURL := flag.String("public-url", envOr("STAG_PUBLIC_URL", "http://localhost:8080"), "externally-reachable base URL of this server (for the OAuth redirect_uri)")
 	approvalKey := flag.String("approval-key", "data/approval.key", "Ed25519 key for signing approval releases (auto-generated if absent)")
 	approvalWebhook := flag.String("approval-webhook", os.Getenv("STAG_APPROVAL_WEBHOOK"), "optional URL POSTed a notice when the gate escalates a fresh action")
 	addr := flag.String("addr", ":8080", "listen address")
@@ -65,20 +70,9 @@ func main() {
 		seed, seedSrc = &p, src
 	}
 
-	// egress sink: resume the chain if the log exists (refuse to append to a tampered one).
-	prev := egress.VerifyResult{}
-	if b, rerr := os.ReadFile(*logPath); rerr == nil && len(b) > 0 {
-		var verr error
-		if prev, verr = egress.Verify(bytes.NewReader(b)); verr != nil {
-			die(fmt.Errorf("egress log %s is tampered, refusing to start: %w", *logPath, verr))
-		}
-	}
-	f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	die(err)
-	defer f.Close()
-
 	// The config store drives the gate's route table (multi-tool).
 	st, serr := store.Open(*storePath)
+	oauthStore := oauth.Store{Dir: *oauthDir}
 	die(serr)
 	defer st.Close()
 	ctx := context.Background()
@@ -97,9 +91,12 @@ func main() {
 		}
 	}
 
-	// the gate carries only the egress Sink; its routes are resolved from the store
-	// per request (serve.Server.liveGate).
-	gate := proxy.Gate{Sink: egress.ResumeJSONLSink(f, prev.Head, prev.Count)}
+	// stag-serve is the control plane + a recipe SIMULATOR: /api/decide answers "what would the gate
+	// decide?" without recording. The canonical, tamper-evident audit is written by exactly ONE process —
+	// the enforcement proxy (stag-proxy) — which owns the hash chain in *logPath. A second appender here
+	// would fork that chain, so the gate carries a DiscardSink; /api/log READS *logPath to surface what
+	// the proxy recorded. (Routes are resolved from the store per request; see serve.Server.liveGate.)
+	gate := proxy.Gate{Sink: egress.DiscardSink{}}
 	// approval signing key (Stage 5): mint signed releases. Auto-generate + persist on first run
 	// (dev: unencrypted on disk is fine). Same key across restarts keeps issued tokens verifiable.
 	priv, kerr := loadOrGenPriv(*approvalKey)
@@ -132,16 +129,23 @@ func main() {
 		Store:           st,
 		ApprovalWebhook: *approvalWebhook,
 		Auth:            &auth.Authenticator{Tokens: tokens, Disabled: *devNoAuth},
+		OAuth:           oauthStore,
+		PublicURL:       strings.TrimRight(*publicURL, "/"),
 	}
 	if *pubPath != "" {
 		pub, perr := loadPub(*pubPath)
 		die(perr)
 		srv.Pub = pub
 	}
-	// wire the real MCP discovery (over the quarantined SDK) into the admin endpoints.
+	// wire the real MCP discovery (over the quarantined SDK) into the admin endpoints. The credential is
+	// resolved through adapterauth so an oauth server yields a fresh bearer (and an unauthorized one
+	// surfaces a clean "run sign-in" discovery error instead of a raw connect failure).
 	srv.Discover = func(ctx context.Context, sv store.MCPServer) ([]store.MCPTool, error) {
-		dts, derr := mcpgate.DiscoverTools(ctx, sv.Transport, sv.Target,
-			mcpgate.Auth{Scheme: sv.AuthScheme, Header: sv.AuthHeader, Credential: sv.Credential()})
+		dauth, aerr := adapterauth.Resolve(ctx, oauthStore, nil, sv)
+		if aerr != nil {
+			return nil, aerr
+		}
+		dts, derr := mcpgate.DiscoverTools(ctx, sv.Transport, sv.Target, dauth)
 		if derr != nil {
 			return nil, derr
 		}
@@ -162,6 +166,14 @@ func loadPub(path string) (ed25519.PublicKey, error) {
 		return nil, err
 	}
 	return egress.ParsePublic(b)
+}
+
+// envOr returns the environment value for key, or def when unset/empty.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // loadOrGenPriv loads the approval signing key, generating + persisting one (0600) on first run.

@@ -16,10 +16,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/scanset/stoagraph/stoa-kernel/stag/auth"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/egress"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/notify"
+	"github.com/scanset/stoagraph/stoa-kernel/stag/oauth"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/recipestore"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/router"
@@ -44,6 +46,15 @@ type Server struct {
 	// (injected by the cmd over the quarantined MCP SDK; nil = discovery disabled). Takes the whole
 	// server so the credential travels with it. Keeping it a func keeps serve free of the MCP dep.
 	Discover func(ctx context.Context, srv store.MCPServer) ([]store.MCPTool, error)
+	// OAuth is the per-server token store for oauth-scheme downstreams; PublicURL is this server's
+	// externally-reachable base (the OAuth redirect_uri is PublicURL + oauth.CallbackPath). The human
+	// operator runs sign-in here; the gate holds the tokens so the agent never does.
+	OAuth     oauth.Store
+	PublicURL string
+	// oauthPending tracks in-flight sign-ins (state -> PKCE verifier + discovered config) between
+	// /api/oauth/start and the browser callback. In-memory: a restart mid-flow just means re-clicking.
+	oauthMu      sync.Mutex
+	oauthPending map[string]pendingOAuth
 }
 
 // liveGate returns the gate to decide with: when a Store is configured, the router
@@ -157,6 +168,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/mcp-servers", read(s.handleMCPList))
 	mux.HandleFunc("POST /api/mcp-servers", admin(s.handleMCPPut))
 	mux.HandleFunc("DELETE /api/mcp-servers/{name}", admin(s.handleMCPDelete))
+
+	// OAuth sign-in for oauth-scheme downstreams. start/status are admin/read-guarded; the callback is
+	// PUBLIC because the provider redirects the operator's browser to it — the unguessable state param
+	// (minted only by an admin-authenticated start) is what authenticates the completion.
+	mux.HandleFunc("POST /api/oauth/start", admin(s.handleOAuthStart))
+	mux.HandleFunc("GET /api/oauth/status", read(s.handleOAuthStatus))
+	mux.HandleFunc("GET /api/oauth/callback", s.handleOAuthCallback)
 	// context providers (the READ channel adapters)
 	mux.HandleFunc("GET /api/providers", read(s.handleProviderList))
 	mux.HandleFunc("POST /api/providers", admin(s.handleProviderPut))
@@ -255,15 +273,19 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, lv)
 		return
 	}
+	// egress.Verify returned no error => the hash chain is INTACT. That is the tamper-evident
+	// guarantee, and it holds with or without a signature — so `Verified` reflects it here. A signed
+	// checkpoint is a STRONGER, additional property (offline-verifiable against a public key), tracked
+	// separately in `Signed`; a signature that FAILS demotes back to unverified with an error.
 	lv.Verify.Count, lv.Verify.Head = res.Count, res.Head
+	lv.Verify.Verified = true
 	if cp, cerr := os.ReadFile(s.LogPath + ".checkpoint"); cerr == nil && s.Pub != nil {
 		lv.Verify.Signed = true
 		var sc egress.SignedCheckpoint
 		if json.Unmarshal(cp, &sc) == nil {
 			lv.Verify.KeyID = sc.KeyID
-			if _, e := egress.VerifySigned(s.Pub, sc, bytes.NewReader(b)); e == nil {
-				lv.Verify.Verified = true
-			} else {
+			if _, e := egress.VerifySigned(s.Pub, sc, bytes.NewReader(b)); e != nil {
+				lv.Verify.Verified = false
 				lv.Verify.Error = e.Error()
 			}
 		}

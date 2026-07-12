@@ -1,6 +1,8 @@
 "use client";
 
 import { isLoggedIn } from "./lib/session";
+import { isGateEmpty } from "./lib/demo";
+import GetStarted from "./components/GetStarted";
 import { useCallback, useEffect, useState } from "react";
 import {
   decide,
@@ -38,13 +40,14 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [authed, setAuthed] = useState(true);
+  const [empty, setEmpty] = useState<boolean | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const refreshLog = useCallback(() => {
     getLog().then(setLog).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     // A 401 means "not signed in", which is NOT the same as "backend offline" — reporting the former
     // as the latter sends people hunting for a dead server when they just need to log in.
     setAuthed(isLoggedIn());
@@ -55,8 +58,11 @@ export default function Page() {
         setConnected(true);
       })
       .catch(() => setConnected(false));
+    isGateEmpty().then(setEmpty).catch(() => setEmpty(false));
     refreshLog();
   }, [refreshLog]);
+
+  useEffect(() => load(), [load]);
 
   const submit = useCallback(async () => {
     if (!policy || busy) return;
@@ -78,25 +84,35 @@ export default function Page() {
 
   const current = decisions[selected] ?? null;
 
+  // Signed in, gate empty → onboarding instead of a blank playground. (Only when authed: an empty read
+  // could just mean "not logged in", and the topbar already says "sign in" for that.)
+  const showOnboarding = authed && empty === true;
+
   return (
     <>
       <Topbar connected={connected} authed={authed} policy={policy} />
       <div className="flex-1 overflow-auto p-6">
-        <DecideBar
-          policy={policy}
-          value={value}
-          setValue={setValue}
-          onSubmit={submit}
-          busy={busy}
-          err={err}
-        />
-        <div className="mt-5">
-          <Stats decisions={decisions} log={log} />
-        </div>
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.55fr_1fr]">
-          <Feed decisions={decisions} selected={selected} onSelect={setSelected} />
-          <Detail decision={current} log={log} onVerify={refreshLog} />
-        </div>
+        {showOnboarding ? (
+          <GetStarted onLoaded={load} />
+        ) : (
+          <>
+            <DecideBar
+              policy={policy}
+              value={value}
+              setValue={setValue}
+              onSubmit={submit}
+              busy={busy}
+              err={err}
+            />
+            <div className="mt-5">
+              <Stats decisions={decisions} log={log} />
+            </div>
+            <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.55fr_1fr]">
+              <Feed decisions={decisions} selected={selected} onSelect={setSelected} />
+              <Detail decision={current} log={log} onVerify={refreshLog} />
+            </div>
+          </>
+        )}
       </div>
     </>
   );

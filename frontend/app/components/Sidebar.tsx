@@ -41,7 +41,9 @@ export default function Sidebar() {
     <aside className="flex w-[228px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
       <div className="flex h-14 items-center gap-2.5 border-b border-[var(--border)] px-5">
         <Logo />
-        <span className="font-mono text-[15px] font-semibold tracking-tight">stag</span>
+        <span className="text-[15px] font-semibold tracking-tight">
+          Stoa<span className="text-[var(--accent)]">Graph</span>
+        </span>
       </div>
       <nav className="flex flex-col gap-0.5 p-3">
         {NAV.map(([label, href]) => {
@@ -232,13 +234,12 @@ function TokenBox({
 }
 
 function Logo() {
+  // The mark is white line-art on black (a stoa, with the gate/graph node between its columns). The
+  // black square reads as intentional inside a bordered tile — no transparency needed.
   return (
-    <span className="grid h-7 w-7 place-items-center rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)]">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path d="M12 3 4 6v6c0 4.4 3.2 7.6 8 10 4.8-2.4 8-5.6 8-10V6l-8-3Z" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
-        <circle cx="12" cy="11" r="2" fill="var(--allow)" />
-        <path d="M12 13v3M12 11 8.5 8.5M12 11l3.5-2.5" stroke="var(--allow)" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
+    <span className="grid h-7 w-7 place-items-center overflow-hidden rounded-md border border-[var(--border-strong)] bg-black">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/stoa-graph-logo.png" alt="StoaGraph" width={28} height={28} className="h-7 w-7" />
     </span>
   );
 }

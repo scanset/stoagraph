@@ -9,6 +9,11 @@ Looking for something? `tools/find.sh <words>` — e.g. `tools/find.sh escalatio
 
 > stag/ — deterministic kernel, policy, MCP proxy, audit, approvals. NO model, NO keys.
 
+### `stoa-kernel/stag/adapterauth/adapterauth.go`
+Package adapterauth resolves a stored MCP server into the connect-time credential the gate injects downstream. It is the single place that maps the oauth scheme to a fresh bearer token (refreshing if needed); bearer, hea
+
+**kw:** adapter · auth · resolve · oauth · bearer · connect · credential
+
 ### `stoa-kernel/stag/auth/auth.go`
 Package auth is the control-plane authentication for stag (Planning/31): bearer tokens with ROLES.  The load-bearing rule this package exists to enforce: the `dispatch` role (the ORCHESTRATOR — a machine) may bind sessio
 
@@ -24,11 +29,12 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 - `JSONLSink` (:45) — jsonl · sink · writer · seq · head · chained · append-only · concurrent
 - `NewJSONLSink` (:53) — new · jsonl · sink · fresh · genesis
 - `ResumeJSONLSink` (:58) — resume · jsonl · sink · continue · existing · chain · head · seq
-- `Record` (:63) — record · append · chained · leaf · fail-closed · no-advance-on-error
-- `Head` (:104) — head · last · leaf · hash
-- `Count` (:111) — count · leaves · written
-- `leafHash` (:118) — leaf · hash · canonical · seq · prev · event-hash
-- `Verify` (:127) — verify · chain · integrity · head · count · tamper-evident · recompute
+- `Record` (:70) — discard · sink · record · nothing · simulator · no · audit
+- `Record` (:73) — record · append · chained · leaf · fail-closed · no-advance-on-error
+- `Head` (:114) — head · last · leaf · hash
+- `Count` (:121) — count · leaves · written
+- `leafHash` (:128) — leaf · hash · canonical · seq · prev · event-hash
+- `Verify` (:137) — verify · chain · integrity · head · count · tamper-evident · recompute
 
 ### `stoa-kernel/stag/egress/sign.go`
 
@@ -107,6 +113,23 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 Package notify is the OPTIONAL push side of the human-approval loop (Stage 5): a fire-and-forget webhook that POSTs a pending-approval notice to an external system (Slack/PagerDuty/an existing change-approval flow) when 
 
 **kw:** webhook · approval · escalate · push · best-effort · async · non-blocking · notification · stage5
+
+### `stoa-kernel/stag/oauth/oauth.go`
+Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE + RFC 7591 dynamic client registration + RFC 8414/9728 metadata discovery) that the gate uses to obtain and refresh access tokens for OAuth-
+
+**kw:** oauth · downstream · authorization-code · pkce · dcr · discovery · refresh · token-store · bearer
+
+- `Config` (:40) — oauth · config · endpoints · client · discovery
+- `Tokens` (:53) — oauth · tokens · access · refresh · expiry
+- `State` (:62) — oauth · state · config · tokens · persisted
+- `Store` (:75) — oauth · store · dir · load · save · file
+- `Bearer` (:112) — oauth · bearer · resolve · refresh · connect
+- `Discover` (:147) — oauth · discover · metadata · protected-resource · authorization-server · well-known
+- `Register` (:201) — oauth · register · dcr · dynamic · client
+- `PKCE` (:232) — oauth · pkce · verifier · challenge · s256
+- `AuthCodeURL` (:245) — oauth · auth-code · url · authorize · pkce · resource
+- `Exchange` (:268) — oauth · exchange · authorization-code · token
+- `Refresh` (:283) — oauth · refresh · token · grant
 
 ### `stoa-kernel/stag/provider/provider.go`
 Package provider is the READ channel of the dual proxy (Planning/17/18): context providers behind one interface, with the load-bearing guarantee that ALL context is stamped untrusted at origin, unbypassably. A provider y
@@ -212,6 +235,10 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 - `MCPToolView` (:14) — mcp · tool · view · name · schema
 - `MCPServerView` (:20) — mcp · server · view · name · transport · target · enabled · tools · discover-error · auth
 
+### `stoa-kernel/stag/serve/oauth.go`
+
+**kw:** oauth · start · callback · status · pending · pkce · sign-in · handlers · downstream · authorization-code
+
 ### `stoa-kernel/stag/serve/providers.go`
 
 **kw:** context · provider · endpoints · read · channel · list · put · delete · adapters · config
@@ -235,19 +262,19 @@ Package serve is the HTTP operator surface over the gating proxy (Planning/16): 
 
 **kw:** http · api · console · proxy · gate · decide · log · policies · health · fail-closed · json · cors · no-auth
 
-- `Server` (:30) — server · gate · logpath · pub · priv · policies · recipes · store · approval-webhook
-- `PolicyView` (:72) — policy · view · tool · recipe · gatearg
-- `ChainView` (:79) — chain · view · sense · reason · decide · act · prove
-- `EventView` (:88) — event · view · field · rule · actor · subject
-- `DecisionView` (:96) — decision · view · verdict · forward · value · rule · chain · events
-- `VerifyView` (:110) — verify · view · count · head · signed · keyid · verified · error
-- `LogView` (:120) — log · view · events · verify
-- `Handler` (:126) — handler · mux · routes · api · decide · log · policies · health · cors
-- `cors` (:177) — cors · permissive · dev · preflight
-- `handleDecide` (:192) — decide · decode · gate · view · fail-closed
-- `view` (:211) — view · decision · to · legible · view · chain · events
-- `handleLog` (:241) — log · read · verify · signed · events
-- `readEvents` (:276) — read · events · parse · leaves · to · event · views
+- `Server` (:32) — server · gate · logpath · pub · priv · policies · recipes · store · approval-webhook
+- `PolicyView` (:83) — policy · view · tool · recipe · gatearg
+- `ChainView` (:90) — chain · view · sense · reason · decide · act · prove
+- `EventView` (:99) — event · view · field · rule · actor · subject
+- `DecisionView` (:107) — decision · view · verdict · forward · value · rule · chain · events
+- `VerifyView` (:121) — verify · view · count · head · signed · keyid · verified · error
+- `LogView` (:131) — log · view · events · verify
+- `Handler` (:137) — handler · mux · routes · api · decide · log · policies · health · cors
+- `cors` (:195) — cors · permissive · dev · preflight
+- `handleDecide` (:210) — decide · decode · gate · view · fail-closed
+- `view` (:229) — view · decision · to · legible · view · chain · events
+- `handleLog` (:259) — log · read · verify · signed · events
+- `readEvents` (:298) — read · events · parse · leaves · to · event · views
 
 ### `stoa-kernel/stag/stag.go`
 Package stag is the public entry point to the StAG kernel: Eval, the recipe evaluator that composes the internal trust/gate/release/record primitives into the product's load-bearing guarantee (no non-authoritative value 
@@ -437,7 +464,7 @@ Command stag-proxy is the standing gating MCP server — the front door an agent
 **kw:** cmd · gate · mcp · gating · proxy · daemon · session-to-recipe · stdio · streamable-http · live-vs-ready · fail-closed · dispatch-role
 
 ### `stoa-kernel/cmd/stag-serve/main.go`
-Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It loads a policy recipe, builds a proxy.Gate that records cleared crossings to a hash-chained egress l
+Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording
 
 **kw:** cmd · stag-serve · http · api · console · backend · gating · proxy · decide · log
 

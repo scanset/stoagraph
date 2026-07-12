@@ -187,7 +187,9 @@ export type MCPServerInput = {
   authHeader?: string;
   secret?: string; // empty on edit preserves the stored secret
   secretEnv?: string;
+  oauthConfig?: string; // optional JSON {client_id, scopes} for providers without dynamic registration
 };
+export type OAuthStatus = { authorized: boolean; expiresAt?: string; hasRefresh?: boolean };
 export type ProviderView = { name: string; kind: string; config: string; enabled: boolean };
 export type RouteView = { tool: string; recipe: string; gateArg: string; valid: boolean; error?: string };
 
@@ -213,6 +215,13 @@ async function jdelete(path: string): Promise<void> {
 export const listMCPServers = () => jget<MCPServerView[]>("/api/mcp-servers");
 export const addMCPServer = (s: MCPServerInput) => jpost<MCPServerView>("/api/mcp-servers", s);
 export const deleteMCPServer = (name: string) => jdelete(`/api/mcp-servers/${encodeURIComponent(name)}`);
+
+// OAuth sign-in for oauth-scheme downstreams. start returns the provider URL to open; status reports
+// whether the gate now holds a usable token. The gate holds the tokens — the browser only relays the code.
+export const oauthStart = async (server: string) =>
+  (await jpost<{ authUrl: string }>(`/api/oauth/start?server=${encodeURIComponent(server)}`, {})).data;
+export const oauthStatus = (server: string) =>
+  jget<OAuthStatus>(`/api/oauth/status?server=${encodeURIComponent(server)}`);
 
 // context providers (read channel)
 export const listProviders = () => jget<ProviderView[]>("/api/providers");

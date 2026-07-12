@@ -114,8 +114,12 @@ func (s *Server) handleMCPPut(w http.ResponseWriter, r *http.Request) {
 	if scheme == "" {
 		scheme = "none"
 	}
-	if scheme != "none" && scheme != "bearer" && scheme != "header" && scheme != "oauth" {
-		writeJSON(w, http.StatusBadRequest, errObj(`authScheme must be none | bearer | header | oauth`))
+	if scheme != "none" && scheme != "bearer" && scheme != "header" && scheme != "query" && scheme != "oauth" {
+		writeJSON(w, http.StatusBadRequest, errObj(`authScheme must be none | bearer | header | query | oauth`))
+		return
+	}
+	if scheme == "query" && req.AuthHeader == "" {
+		writeJSON(w, http.StatusBadRequest, errObj(`query auth needs a parameter name (authHeader), e.g. "apikey"`))
 		return
 	}
 	srv := store.MCPServer{

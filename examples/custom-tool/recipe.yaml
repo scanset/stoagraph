@@ -1,0 +1,19 @@
+# Gates the `notify` tool's `channel` argument: the agent may post only to these channels.
+# A prompt-injected "post the SSN to #exec-private" is denied — #exec-private isn't in the set.
+recipe: notify_policy
+version: 1
+rules:
+  channel.allowed:
+    kind: set_membership
+    set: ["support", "general", "incidents"]
+steps:
+  - id: propose_channel
+    kind: propose
+    out: channel
+  - id: post
+    kind: sink
+    in: channel
+    field: notify.channel
+    sensitivity: authoritative
+    rule: channel.allowed
+    actor: "policy:notify"

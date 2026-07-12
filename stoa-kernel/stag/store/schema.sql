@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS mcp_server (
   -- Downstream auth (Planning/28) — HTTP only; stdio servers authenticate via the proxy's process
   -- env. The GATE holds the credential so the agent never does (credential isolation). Prefer
   -- secret_env over a persisted secret.
-  auth_scheme  TEXT NOT NULL DEFAULT 'none',  -- none | bearer | header | oauth (oauth = v1.1)
+  auth_scheme  TEXT NOT NULL DEFAULT 'none',  -- none | bearer | header | query | oauth
   auth_header  TEXT NOT NULL DEFAULT '',       -- header scheme: the header name (bearer => Authorization)
   secret       TEXT NOT NULL DEFAULT '',       -- dev: the bearer/header value or oauth client_secret
   secret_env   TEXT NOT NULL DEFAULT '',       -- PREFERRED: env var holding the secret

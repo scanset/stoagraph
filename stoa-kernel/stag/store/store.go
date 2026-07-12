@@ -31,7 +31,7 @@ type MCPServer struct {
 	Tools     []MCPTool
 	// Downstream auth (Planning/28): the credential the GATE uses to reach an authenticated HTTP
 	// downstream, so the agent never holds it. Credential() resolves Secret (dev) else SecretEnv.
-	AuthScheme  string // none | bearer | header | oauth
+	AuthScheme  string // none | bearer | header | query | oauth
 	AuthHeader  string // header scheme: the header name
 	Secret      string // dev direct secret
 	SecretEnv   string // env var holding the secret (preferred)

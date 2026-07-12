@@ -129,7 +129,7 @@
       "symbols": []
     },
     {
-      "doc": "Command stag-serve runs the HTTP API over the gating proxy (Planning/16) \u2014 the backend the Next.js console talks to. It loads a policy recipe, builds a proxy.Gate that records cleared crossings to a hash-chained egress l",
+      "doc": "Command stag-serve runs the HTTP API over the gating proxy (Planning/16) \u2014 the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording",
       "keywords": [
         "cmd",
         "stag-serve",
@@ -737,6 +737,22 @@
       "symbols": []
     },
     {
+      "doc": "Package adapterauth resolves a stored MCP server into the connect-time credential the gate injects downstream. It is the single place that maps the oauth scheme to a fresh bearer token (refreshing if needed); bearer, hea",
+      "keywords": [
+        "adapter",
+        "auth",
+        "resolve",
+        "oauth",
+        "bearer",
+        "connect",
+        "credential"
+      ],
+      "layer": "gate",
+      "package": "adapterauth",
+      "path": "stoa-kernel/stag/adapterauth/adapterauth.go",
+      "symbols": []
+    },
+    {
       "doc": "Package auth is the control-plane authentication for stag (Planning/31): bearer tokens with ROLES.  The load-bearing rule this package exists to enforce: the `dispatch` role (the ORCHESTRATOR \u2014 a machine) may bind sessio",
       "keywords": [
         "control-plane",
@@ -837,6 +853,19 @@
         },
         {
           "kw": [
+            "discard",
+            "sink",
+            "record",
+            "nothing",
+            "simulator",
+            "no",
+            "audit"
+          ],
+          "line": 70,
+          "name": "Record"
+        },
+        {
+          "kw": [
             "record",
             "append",
             "chained",
@@ -844,7 +873,7 @@
             "fail-closed",
             "no-advance-on-error"
           ],
-          "line": 63,
+          "line": 73,
           "name": "Record"
         },
         {
@@ -854,7 +883,7 @@
             "leaf",
             "hash"
           ],
-          "line": 104,
+          "line": 114,
           "name": "Head"
         },
         {
@@ -863,7 +892,7 @@
             "leaves",
             "written"
           ],
-          "line": 111,
+          "line": 121,
           "name": "Count"
         },
         {
@@ -875,7 +904,7 @@
             "prev",
             "event-hash"
           ],
-          "line": 118,
+          "line": 128,
           "name": "leafHash"
         },
         {
@@ -888,7 +917,7 @@
             "tamper-evident",
             "recompute"
           ],
-          "line": 127,
+          "line": 137,
           "name": "Verify"
         }
       ]
@@ -1452,6 +1481,147 @@
       "package": "notify",
       "path": "stoa-kernel/stag/notify/notify.go",
       "symbols": []
+    },
+    {
+      "doc": "Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE + RFC 7591 dynamic client registration + RFC 8414/9728 metadata discovery) that the gate uses to obtain and refresh access tokens for OAuth-",
+      "keywords": [
+        "oauth",
+        "downstream",
+        "authorization-code",
+        "pkce",
+        "dcr",
+        "discovery",
+        "refresh",
+        "token-store",
+        "bearer"
+      ],
+      "layer": "gate",
+      "package": "oauth",
+      "path": "stoa-kernel/stag/oauth/oauth.go",
+      "symbols": [
+        {
+          "kw": [
+            "oauth",
+            "config",
+            "endpoints",
+            "client",
+            "discovery"
+          ],
+          "line": 40,
+          "name": "Config"
+        },
+        {
+          "kw": [
+            "oauth",
+            "tokens",
+            "access",
+            "refresh",
+            "expiry"
+          ],
+          "line": 53,
+          "name": "Tokens"
+        },
+        {
+          "kw": [
+            "oauth",
+            "state",
+            "config",
+            "tokens",
+            "persisted"
+          ],
+          "line": 62,
+          "name": "State"
+        },
+        {
+          "kw": [
+            "oauth",
+            "store",
+            "dir",
+            "load",
+            "save",
+            "file"
+          ],
+          "line": 75,
+          "name": "Store"
+        },
+        {
+          "kw": [
+            "oauth",
+            "bearer",
+            "resolve",
+            "refresh",
+            "connect"
+          ],
+          "line": 112,
+          "name": "Bearer"
+        },
+        {
+          "kw": [
+            "oauth",
+            "discover",
+            "metadata",
+            "protected-resource",
+            "authorization-server",
+            "well-known"
+          ],
+          "line": 147,
+          "name": "Discover"
+        },
+        {
+          "kw": [
+            "oauth",
+            "register",
+            "dcr",
+            "dynamic",
+            "client"
+          ],
+          "line": 201,
+          "name": "Register"
+        },
+        {
+          "kw": [
+            "oauth",
+            "pkce",
+            "verifier",
+            "challenge",
+            "s256"
+          ],
+          "line": 232,
+          "name": "PKCE"
+        },
+        {
+          "kw": [
+            "oauth",
+            "auth-code",
+            "url",
+            "authorize",
+            "pkce",
+            "resource"
+          ],
+          "line": 245,
+          "name": "AuthCodeURL"
+        },
+        {
+          "kw": [
+            "oauth",
+            "exchange",
+            "authorization-code",
+            "token"
+          ],
+          "line": 268,
+          "name": "Exchange"
+        },
+        {
+          "kw": [
+            "oauth",
+            "refresh",
+            "token",
+            "grant"
+          ],
+          "line": 283,
+          "name": "Refresh"
+        }
+      ]
     },
     {
       "doc": "Package provider is the READ channel of the dual proxy (Planning/17/18): context providers behind one interface, with the load-bearing guarantee that ALL context is stamped untrusted at origin, unbypassably. A provider y",
@@ -2276,6 +2446,25 @@
     {
       "doc": "",
       "keywords": [
+        "oauth",
+        "start",
+        "callback",
+        "status",
+        "pending",
+        "pkce",
+        "sign-in",
+        "handlers",
+        "downstream",
+        "authorization-code"
+      ],
+      "layer": "gate",
+      "package": "serve",
+      "path": "stoa-kernel/stag/serve/oauth.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
         "context",
         "provider",
         "endpoints",
@@ -2405,7 +2594,7 @@
             "store",
             "approval-webhook"
           ],
-          "line": 30,
+          "line": 32,
           "name": "Server"
         },
         {
@@ -2416,7 +2605,7 @@
             "recipe",
             "gatearg"
           ],
-          "line": 72,
+          "line": 83,
           "name": "PolicyView"
         },
         {
@@ -2429,7 +2618,7 @@
             "act",
             "prove"
           ],
-          "line": 79,
+          "line": 90,
           "name": "ChainView"
         },
         {
@@ -2441,7 +2630,7 @@
             "actor",
             "subject"
           ],
-          "line": 88,
+          "line": 99,
           "name": "EventView"
         },
         {
@@ -2455,7 +2644,7 @@
             "chain",
             "events"
           ],
-          "line": 96,
+          "line": 107,
           "name": "DecisionView"
         },
         {
@@ -2469,7 +2658,7 @@
             "verified",
             "error"
           ],
-          "line": 110,
+          "line": 121,
           "name": "VerifyView"
         },
         {
@@ -2479,7 +2668,7 @@
             "events",
             "verify"
           ],
-          "line": 120,
+          "line": 131,
           "name": "LogView"
         },
         {
@@ -2494,7 +2683,7 @@
             "health",
             "cors"
           ],
-          "line": 126,
+          "line": 137,
           "name": "Handler"
         },
         {
@@ -2504,7 +2693,7 @@
             "dev",
             "preflight"
           ],
-          "line": 177,
+          "line": 195,
           "name": "cors"
         },
         {
@@ -2515,7 +2704,7 @@
             "view",
             "fail-closed"
           ],
-          "line": 192,
+          "line": 210,
           "name": "handleDecide"
         },
         {
@@ -2528,7 +2717,7 @@
             "chain",
             "events"
           ],
-          "line": 211,
+          "line": 229,
           "name": "view"
         },
         {
@@ -2539,7 +2728,7 @@
             "signed",
             "events"
           ],
-          "line": 241,
+          "line": 259,
           "name": "handleLog"
         },
         {
@@ -2552,7 +2741,7 @@
             "event",
             "views"
           ],
-          "line": 276,
+          "line": 298,
           "name": "readEvents"
         }
       ]

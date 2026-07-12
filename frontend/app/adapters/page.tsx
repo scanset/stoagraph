@@ -12,7 +12,10 @@ import {
   listProviders,
   listRecipes,
   listRoutes,
+  oauthStart,
+  oauthStatus,
   type MCPServerView,
+  type OAuthStatus,
   type ProviderView,
   type RouteView,
   type ValidateResult,
@@ -124,7 +127,11 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
   const [secretEnv, setSecretEnv] = useState("");
 
   const selectCls = "rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2 py-1.5 text-[12px] text-[var(--text)]";
-  const showAuth = transport === "http" && authScheme !== "none";
+  // header + query carry a name field; bearer/header/query carry a secret; oauth carries neither
+  // (its tokens come from the sign-in flow, held gate-side — you add the server, then click Sign in).
+  const named = authScheme === "header" || authScheme === "query";
+  const needsSecret = authScheme === "bearer" || authScheme === "header" || authScheme === "query";
+  const isOAuth = authScheme === "oauth";
 
   return (
     <Card title="MCP servers" sub="act channel · tool calls gated before they reach these">
@@ -140,16 +147,22 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
           onChange={(e) => setTarget(e.target.value)}
         />
         {transport === "http" && (
-          <select value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} className={selectCls} title="downstream auth (the gate holds the credential)">
+          <select value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} className={selectCls} title="downstream auth — the gate holds the credential; the agent never sees it">
             <option value="none">no auth</option>
-            <option value="bearer">bearer</option>
-            <option value="header">header</option>
+            <option value="bearer">bearer / token</option>
+            <option value="header">header key</option>
+            <option value="query">query-param key</option>
+            <option value="oauth">OAuth sign-in</option>
           </select>
         )}
-        {showAuth && authScheme === "header" && (
-          <Input placeholder="header name (e.g. X-API-Key)" value={authHeader} onChange={(e) => setAuthHeader(e.target.value)} />
+        {transport === "http" && named && (
+          <Input
+            placeholder={authScheme === "query" ? "param name (e.g. apikey)" : "header name (e.g. X-API-Key)"}
+            value={authHeader}
+            onChange={(e) => setAuthHeader(e.target.value)}
+          />
         )}
-        {showAuth && (
+        {transport === "http" && needsSecret && (
           <>
             <Input placeholder="secret env var (preferred)" value={secretEnv} onChange={(e) => setSecretEnv(e.target.value)} />
             <input
@@ -161,8 +174,11 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
             />
           </>
         )}
+        {transport === "http" && isOAuth && (
+          <span className="text-[11px] text-[var(--faint)]">add it, then click <span className="text-[var(--accent)]">Sign in</span> on the row →</span>
+        )}
         <AddBtn
-          disabled={!name || !target || (showAuth && authScheme === "header" && !authHeader) || (showAuth && !secret && !secretEnv)}
+          disabled={!name || !target || (named && !authHeader) || (needsSecret && !secret && !secretEnv)}
           onClick={() =>
             wrap(async () => {
               await addMCPServer({ name, transport, target, authScheme, authHeader, secret, secretEnv });
@@ -185,15 +201,19 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[13px] text-[var(--text)]">{s.name}</span>
                 <span className="rounded bg-[var(--panel-3)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">{s.transport}</span>
-                {s.authScheme && s.authScheme !== "none" && (
+                {s.authScheme === "oauth" ? (
+                  <OAuthControls server={s} wrap={wrap} />
+                ) : s.authScheme && s.authScheme !== "none" ? (
                   <span className="rounded bg-[var(--panel-3)] px-1.5 py-0.5 text-[10px] text-[var(--accent)]" title={s.secretEnv ? `env ${s.secretEnv}` : s.secretHint ? `key ${s.secretHint}` : "no secret set"}>
                     🔒 {s.authScheme}{s.secretSet || s.secretEnv ? "" : " ⚠"}
                   </span>
-                )}
+                ) : null}
                 <span className="truncate font-mono text-[11px] text-[var(--faint)]">{s.target}</span>
               </div>
               {s.discoverError ? (
-                <div className="mt-1 text-[11px] text-[var(--deny)]">unreachable: {s.discoverError}</div>
+                <div className={`mt-1 text-[11px] ${s.authScheme === "oauth" ? "text-[var(--faint)]" : "text-[var(--deny)]"}`}>
+                  {s.authScheme === "oauth" ? "sign in to discover this server's tools" : `unreachable: ${s.discoverError}`}
+                </div>
               ) : (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {s.tools.length === 0 && <span className="text-[11px] text-[var(--faint)]">no tools</span>}
@@ -211,6 +231,86 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
       )}
     </Card>
   );
+}
+
+/* OAuth sign-in for an oauth-scheme server. The gate holds the tokens; this only opens the provider's
+ * window and polls until the gate reports a usable token, then re-discovers the server's tools. */
+function OAuthControls({ server, wrap }: { server: MCPServerView; wrap: (fn: () => Promise<void>) => void }) {
+  const [status, setStatus] = useState<OAuthStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    oauthStatus(server.name).then(setStatus).catch(() => setStatus(null));
+  }, [server.name]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const signIn = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const { authUrl } = await oauthStart(server.name);
+      const popup = window.open(authUrl, "stoagraph-oauth", "width=520,height=720");
+      const started = Date.now();
+      const timer = setInterval(async () => {
+        const st = await oauthStatus(server.name).catch(() => null);
+        if (st?.authorized) {
+          clearInterval(timer);
+          popup?.close();
+          setStatus(st);
+          setBusy(false);
+          // re-discover now that the gate holds a token (secret omitted => stored creds preserved)
+          wrap(async () => {
+            await addMCPServer({
+              name: server.name,
+              transport: server.transport,
+              target: server.target,
+              authScheme: server.authScheme,
+              authHeader: server.authHeader,
+            });
+          });
+        } else if (Date.now() - started > 180000) {
+          clearInterval(timer);
+          setBusy(false);
+          refresh();
+        }
+      }, 1500);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+
+  const authed = status?.authorized;
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className="rounded px-1.5 py-0.5 text-[10px]"
+        style={authed ? { color: "var(--allow)", backgroundColor: "var(--allow-soft)" } : { color: "var(--escalate)", backgroundColor: "var(--escalate-soft)" }}
+        title={authed ? expiryHint(status) : "no token yet — click Sign in"}
+      >
+        🔐 {authed ? "signed in" : "not signed in"}
+      </span>
+      <button
+        onClick={signIn}
+        disabled={busy}
+        className="rounded border border-[var(--border-strong)] px-1.5 py-0.5 text-[10px] text-[var(--accent)] hover:bg-[var(--panel-3)] disabled:opacity-50"
+      >
+        {busy ? "signing in…" : authed ? "re-auth" : "Sign in"}
+      </button>
+      {err && <span className="text-[10px] text-[var(--deny)]">{err}</span>}
+    </span>
+  );
+}
+
+function expiryHint(st: OAuthStatus | null): string {
+  if (!st?.expiresAt) return "token stored (no expiry)";
+  const ms = new Date(st.expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "expired — refreshes on next call";
+  const min = Math.round(ms / 60000);
+  return min < 60 ? `expires in ${min}m` : `expires in ${Math.round(min / 60)}h`;
 }
 
 /* --------------------------- providers --------------------------- */

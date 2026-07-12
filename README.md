@@ -1,144 +1,101 @@
 # StoaGraph
 
-**Verifiable control for AI agents.** An agent proposes; a deterministic gate disposes.
-
-StoaGraph sits between an AI agent and the world. Every tool call the agent makes, and every piece of
-context it reads, crosses a gate that decides — **with no model in the decision path** — whether it may
-happen. Cleared calls are forwarded to the real tool; denied ones never reach it. Every crossing is
-written to a tamper-evident log.
+**Verifiable control for AI agents.** An agent proposes; a deterministic gate disposes — with no model
+in the decision path. A hijacked, prompt-injected, or simply wrong model can propose anything; it cannot
+make the gate release a value your policy rejects.
 
 > The model has a flashlight. The gate has the map.
 
-The point is not that the model behaves. The point is that **it doesn't have to.** A hijacked,
-prompt-injected, or simply wrong model can propose anything it likes; it cannot make the gate release a
-value the policy rejects.
+Open source, Apache-2.0. No held-back edition.
 
-## The two pieces
-
-| | | |
-|---|---|---|
-| **`stag`** | the **gate** | Deterministic kernel, MCP gating proxy, policy, audit, approvals. **Holds no model and no API keys.** |
-| **`harness`** | the **orchestrator** | Dispatcher, agent loop, model connections. **Holds the keys.** |
-
-That separation is the product. It is also *enforced*, not merely intended:
-[`architecture_test.go`](stoa-kernel/architecture_test.go) fails the build if any gate package — or
-either gate binary — so much as imports orchestrator code. The gate can be trusted with your
-infrastructure precisely because it is provably incapable of reaching your keys.
-
-Everything here is open source under **[Apache-2.0](LICENSE)** — patent grant included, which is what
-enterprise and public-sector legal teams will ask about first. There is no held-back edition.
-
-## Both channels cross the gate
-
-An agent can do two things: **act** and **read**. Both are mediated.
-
-| Channel | MCP surface | What the gate does |
-|---|---|---|
-| **ACT** | `tools/call` | **allow / deny / escalate.** Forward-iff-cleared — a denied call never reaches the tool. |
-| **READ** | `resources/read` | **label + record.** Context is stamped **untrusted at origin**, unbypassably, and the read is audited. |
-
-Reads are never denied; they are *labeled*. Which brings us to the part most systems get wrong.
-
-## The trust invariant (read this before trusting anything)
-
-The untrusted stamp on context is **positional, not taint-tracking.**
-
-An LLM launders taint. Untrusted text goes in, a tool call comes out, and there is no reliable way to
-know which output bytes came from which input. Any system claiming to propagate a taint label *through*
-a model is lying to you. StoaGraph does not try. Instead:
-
-- **Into the model** — the label's only job is *placement*: untrusted context goes in the input slot,
-  never the instruction slot, so it cannot rewrite the agent's goal.
-- **Out of the model** — there is **no carried label at all.** Every proposal is *presumed untrusted*.
-  The gate re-derives trust **at the sink**, from the policy rule — never from anything the model said.
-
-The only promotions from untrusted to cleared are a rule firing (`set_membership`, `numeric_range`,
-`signed_equality`), and each emits a recorded release event. So poisoned context can change *what the
-agent proposes*. It cannot make the gate *release* a value the rule rejects. A bad read wastes a turn;
-it does not breach.
-
-## Humans stay in the loop — and the machine cannot forge that
-
-When policy says an action needs a person, the gate **escalates** and holds the call. A human approves,
-which mints an ed25519 **signed release** bound to that exact action, and only then does the call proceed.
-
-The orchestrator can *bind sessions* and *poll* for the decision. It **cannot approve** — that is a
-separate credential it is never given. An orchestrator able to approve its own escalations would make
-the human gate decorative, and every test would still pass. So the roles are separate secrets and the
-gate enforces the split. See [SECURITY.md](SECURITY.md).
-
-## Install
+## See it in 60 seconds — no model, no API key
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.1.0/install.sh | sh
-stoagraph up      # mints your control-plane role secrets, pulls the signed images, starts
-stoagraph demo    # loads the containment demo — no model, no API key
+stoagraph up      # mints your secrets, pulls the signed images, starts, prints a login link
+stoagraph demo    # loads a support-agent containment scenario
 ```
 
-Piping a script into your shell, from a product that says *"don't trust — verify"*? Fair. So:
-`install.sh` lives **in this repo at the tag it installs** (what you read is what runs), it
-**verifies the SHA-256** of the binary against published, cosign-signed checksums before executing
-anything, and it prints the `cosign verify` commands for the images. Read it first if you like —
-we would:
-
-```bash
-curl -sSLO https://raw.githubusercontent.com/scanset/stoagraph/v0.1.0/install.sh
-less install.sh && sh install.sh
-```
-
-Already have Go? `go install github.com/scanset/stoagraph/stoa-kernel/cmd/stoagraph@latest`
-
-<details><summary>From source</summary>
-
-```bash
-tools/gen-env.sh && docker compose up -d && tools/demo.sh
-```
-</details>
-
-**No model or API key required to see the point:**
+Now watch an agent try — and fail — to leak a customer's SSN:
 
 ```
-fetch_user_profile(123)                          ALLOW  — returns Alice's record, INCLUDING her SSN
-send_external_reply("Your SSN is 000-12-3456")   DENY   — never reaches the tool
-send_external_reply("Hi Alice, you're unlocked") DENY   — still free-form
-send_external_reply("tmpl:account_unlocked")     ALLOW  — an approved template
+fetch_user_profile(123)                          ALLOW   returns Alice's record, INCLUDING her SSN
+send_external_reply("Your SSN is 000-12-3456")   DENY    never reaches the tool
+send_external_reply("Hi Alice, you're unlocked") DENY    <- innocent, and STILL blocked
+send_external_reply("tmpl:account_unlocked")     ALLOW   an approved template
 ```
 
-Look at the third line. An *innocent* message is blocked too — because **no free-form value can cross
-at all.** The policy never scans for SSNs; it permits four template ids. There is no clever phrasing
-that becomes an approved template id, which is exactly why a jailbroken model cannot get around it.
+**Look at the third line.** An innocent message is blocked too — because *no free-form value can cross
+at all*. The policy never scans for SSNs; it permits four template ids. There is no clever phrasing that
+becomes an approved template id, which is exactly why a jailbroken model cannot get around it.
+Containment is **structural, not content-based**.
 
-Or run it on the host:
+<sub>Piping a script into your shell, from a product that says "don't trust — verify"? Fair. `install.sh`
+lives in this repo at the tag it installs, verifies the binary's SHA-256 against cosign-signed
+checksums before running anything, and prints `cosign verify` for the images. `curl -sSLO …/install.sh
+&& less install.sh && sh install.sh` if you'd rather read first. Have Go?
+`go install github.com/scanset/stoagraph/stoa-kernel/cmd/stoagraph@latest`.</sub>
 
-```bash
-tools/build.sh && tools/up.sh     # prints your control-plane tokens
-```
+## Make it yours
 
-**Five containers, not one** — and that is the security posture, not a diagram. The `approve` secret
-(the one that releases a held action) is injected into the gate and **never into the orchestrator**, so
-a compromised orchestrator cannot approve its own escalation. One container would put every secret on
-one filesystem and make that impossible to prevent. See [docs/docker.md](docs/docker.md).
+Everything below the demo. A fresh gate starts **empty** — nothing is permitted until you author it.
 
-**A fresh instance starts empty.** No recipes, no routes, nothing pre-trusted — a security control
-must not arrive already permitting something you never authored. You load policy by running an example
-(`tools/demo.sh`) or by authoring it in the console. The gate creates its own `data/` on first boot.
+- **Log in.** `stoagraph up` printed a one-click link (the keys ride in the URL fragment, so there's no
+  token to paste). Reprint it with `stoagraph console`. Open **http://localhost:3000**.
+- **Connect a model.** Copy `config/models.example.json` → `config/models.json`, add a key. **The gate
+  never sees it** — only the orchestrator does.
+- **Add your own tool.** [`examples/custom-tool/`](examples/custom-tool/) — a copy-paste MCP server and a
+  12-line recipe. Write one function, gate one argument, and the agent can call your tool on the values
+  you allow and *provably* nowhere else. ~5 minutes.
+- **Run the real demo** against a live Kubernetes cluster: an incident event → the dispatcher binds a
+  session → the agent reads infra facts as untrusted context, investigates with gated reads, proposes a
+  fix to **prod** → the gate **escalates** and waits for a human. See [`examples/k8s/`](examples/k8s/).
 
-`stoagraph up` prints a **one-click login link** — open it once and you are in. (No copy-pasting a
-token: the keys ride in the URL fragment, which never leaves your browser; the console stores them and
-strips them from the address bar.) Reprint it any time with `stoagraph console`.
+## How it works
 
-To connect a model, copy `config/models.example.json` to `config/models.json` and add a key. **The gate
-never sees it.**
+**Two pieces, and the split is the product:**
 
-Then drive the real demo against a live Kubernetes cluster:
+| | | |
+|---|---|---|
+| **`stag`** | the **gate** | Deterministic kernel, MCP proxy, policy, audit, approvals. **No model, no API keys.** |
+| **`harness`** | the **orchestrator** | Dispatcher, agent loop, model connections. **Holds the keys.** |
 
-```bash
-tools/demo.sh             # wires the k8s example; tells you how to fire an incident
-```
+That separation is *enforced*, not intended: [`architecture_test.go`](stoa-kernel/architecture_test.go)
+fails the build if any gate package — or either gate binary — imports orchestrator code. The gate can be
+trusted with your infrastructure precisely because it is *provably incapable* of reaching your keys.
 
-An incident event arrives → the dispatcher picks a policy → a session is bound **on the gate** → the
-agent reads infra facts as untrusted context → investigates with gated reads → proposes a fix to
-**prod** → the gate **escalates** and waits for you.
+**The agent's only wire to the world is the gate.** It has no sandbox, no direct tool access, no
+network, no credentials — it reasons and proposes, and the single channel by which a proposal becomes an
+action is StoaGraph. Both directions cross it:
+
+| Channel | MCP surface | What the gate does |
+|---|---|---|
+| **ACT** | `tools/call` | **allow / deny / escalate** — forward-iff-cleared; a denied call never reaches the tool. |
+| **READ** | `resources/read` | **label + record** — context is stamped untrusted at origin, unbypassably, and audited. |
+
+This is *complete mediation*: a jailbreak changes what the model asks for, not what it can reach — and
+what it can reach is exactly what the gate hands it.
+
+**Humans stay in the loop, and the machine can't forge it.** When policy says an action needs a person,
+the gate escalates and holds the call; a human approves, minting an ed25519 signed release bound to that
+exact action. The orchestrator can *poll* for the decision but **cannot approve** — that's a separate
+secret it is never given. See [SECURITY.md](SECURITY.md).
+
+## The trust invariant (the part most systems get wrong)
+
+The untrusted stamp on context is **positional, not taint-tracking.** An LLM launders taint — text goes
+in, a tool call comes out, and there's no reliable way to know which output bytes came from which input.
+Anything claiming to propagate a taint label *through* a model is lying. StoaGraph doesn't try:
+
+- **Into the model** — the label's only job is *placement*: untrusted context goes in the input slot,
+  never the instruction slot, so it can't rewrite the agent's goal.
+- **Out of the model** — there is **no carried label.** Every proposal is *presumed untrusted*; the gate
+  re-derives trust **at the sink**, from the policy rule.
+
+The only promotions from untrusted → cleared are a rule firing (`set_membership`, `numeric_range`,
+`signed_equality`), each emitting a recorded release event. Poisoned context can change *what the agent
+proposes*; it cannot make the gate *release* a value the rule rejects. A bad read wastes a turn; it does
+not breach.
 
 ## Layout
 
@@ -146,14 +103,12 @@ agent reads infra facts as untrusted context → investigates with gated reads �
 stoa-kernel/   one Go module — the whole backend
   stag/        the GATE         (kernel, policy, proxy, auth, audit, approvals)
   harness/     the ORCHESTRATOR (dispatch, agent loop, models)
-  cmd/         stag-serve · stag-proxy · harness-serve · kbserve · harness
+  cmd/         stag-serve · stag-proxy · harness-serve · kbserve · …
 frontend/      one console, talking to both backends
-examples/      k8s (real cluster) · pii-demo · zt-ops · scratch — policies live WITH their example
-config/        event map + model config
-data/          runtime state, gitignored — config DB, the recipe store, tokens, audit logs
-tools/         build · up · down · check · hygiene · demo
-docs/          recipe authoring · the gating proxy
-planning/      every design decision, including the ones we got wrong
+examples/      custom-tool (start here) · k8s · pii-demo · zt-ops
+config/        event map + model config        data/  runtime state (gitignored)
+tools/         build · up · down · check · hygiene · demo · sbom · find
+docs/ · planning/
 ```
 
 ## Development
@@ -166,18 +121,11 @@ tools/sbom.sh                       # SBOM of the shipped images + a copyleft ga
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md).
 
-`tools/hygiene.sh` exists because both bugs it catches actually happened here: a `.gitignore` pattern
-that silently swallowed 19 source files (the build kept working — only a fresh clone was broken), and a
-secrets file that stayed tracked because `.gitignore` does nothing to an *already-committed* file.
-Neither announces itself. Run it in CI.
-
 ## Docs
 
 - [SECURITY.md](SECURITY.md) — the threat model. **Read the non-goals as carefully as the guarantees.**
 - [docs/recipe-authoring.md](docs/recipe-authoring.md) — the policy language.
 - [docs/mcp-gating-proxy.md](docs/mcp-gating-proxy.md) — how the gate speaks MCP.
 - [docs/docker.md](docs/docker.md) — containers, and why the secrets are split across them.
-- [docs/development.md](docs/development.md) — the dev tools and the one architectural rule.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to work on this (and the one rule that is not negotiable).
-- [INDEX.md](INDEX.md) — a generated map of every component and what it is for.
-- [planning/](planning/) — the full design record.
+- [examples/custom-tool/](examples/custom-tool/) — bring your own tool in ~5 minutes.
+- [planning/](planning/) — the full design record, including the decisions we got wrong.

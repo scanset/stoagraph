@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -15,10 +16,11 @@ import (
 
 // Auth is a downstream server's client credential (Planning/28). It applies to HTTP transports only
 // (a stdio subprocess authenticates via the proxy's process env). Scheme "none"/"" = no auth. The
-// gate holds the credential so the agent never does (credential isolation).
+// gate holds the credential so the agent never does (credential isolation). The oauth scheme is
+// resolved to a fresh bearer token BEFORE Connect (see the oauth package); mcpgate never sees "oauth".
 type Auth struct {
-	Scheme     string // none | bearer | header  (oauth is v1.1, rejected here)
-	Header     string // for scheme "header": the header name
+	Scheme     string // none | bearer | header | query  (oauth is resolved to bearer upstream)
+	Header     string // header scheme: the header name; query scheme: the query-param name
 	Credential string // the resolved secret
 }
 
@@ -84,8 +86,25 @@ func transportFor(kind, target string, a Auth) (mcp.Transport, error) {
 				return nil, fmt.Errorf("mcpgate: header auth configured but credential is empty (check secret / secret_env)")
 			}
 			t.HTTPClient = &http.Client{Transport: authRoundTripper{a.Header, a.Credential, http.DefaultTransport}}
+		case "query":
+			// API key passed as a URL query param (e.g. Alpha Vantage's ?apikey=). The key lives ONLY in
+			// the runtime endpoint here, never in the stored/displayed target — so it stays gate-side.
+			if a.Header == "" {
+				return nil, fmt.Errorf("mcpgate: query auth needs a parameter name (e.g. apikey)")
+			}
+			if a.Credential == "" {
+				return nil, fmt.Errorf("mcpgate: query auth configured but credential is empty (check secret / secret_env)")
+			}
+			u, perr := url.Parse(target)
+			if perr != nil {
+				return nil, fmt.Errorf("mcpgate: invalid http endpoint %q: %w", target, perr)
+			}
+			q := u.Query()
+			q.Set(a.Header, a.Credential)
+			u.RawQuery = q.Encode()
+			t.Endpoint = u.String()
 		case "oauth":
-			return nil, fmt.Errorf("mcpgate: oauth downstream auth is not supported yet (v1.1)")
+			return nil, fmt.Errorf("mcpgate: oauth must be resolved to a bearer token before connect (call oauth.Store.Bearer)")
 		default:
 			return nil, fmt.Errorf("mcpgate: unknown auth scheme %q", a.Scheme)
 		}

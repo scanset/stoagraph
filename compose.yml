@@ -49,6 +49,8 @@ services:
       STAG_ADMIN_TOKEN: ${STAG_CONSOLE_TOKEN:?run stoagraph up}
       STAG_APPROVE_TOKEN: ${STAG_CONSOLE_TOKEN:?run stoagraph up}
       STAG_DISPATCH_TOKEN: ${STAG_DISPATCH_TOKEN:?run stoagraph up}
+      # externally-reachable base URL for OAuth redirect_uri (override when not on localhost)
+      STAG_PUBLIC_URL: ${STAG_PUBLIC_URL:-http://localhost:8080}
     ports: ["8080:8080"]
     volumes:
       - data:/app/data # config DB, the recipe store, the audit logs

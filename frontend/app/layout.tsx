@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "stag — assurance console",
+  title: "StoaGraph — control console",
   description:
-    "The deterministic gate for autonomous AI agents. Every tool call gated by policy, decided without a model, and recorded as verifiable proof.",
+    "Verifiable control for AI agents. Every tool call and every context read crosses a deterministic gate — decided without a model, recorded as proof.",
 };
 
 export default function RootLayout({

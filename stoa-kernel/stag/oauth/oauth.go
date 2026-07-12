@@ -1,0 +1,417 @@
+// Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE + RFC 7591 dynamic
+// client registration + RFC 8414/9728 metadata discovery) that the gate uses to obtain and refresh
+// access tokens for OAuth-protected MCP servers.
+//
+// The security model is unchanged: the GATE holds the tokens and injects them at the proxy->tool hop;
+// the agent never sees them. A human operator runs the interactive sign-in from the console (stag-serve
+// builds the authorization URL and handles the callback); the enforcement proxy only READS the stored
+// tokens and refreshes them at connect. Non-secret config and the tokens persist per server as one JSON
+// file under a shared directory, so both processes can read the same state off the data volume.
+package oauth
+
+// file-kw: oauth downstream authorization-code pkce dcr discovery refresh token-store bearer
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// callbackPath is where the provider redirects after sign-in; stag-serve serves it. The caller composes
+// the full redirect_uri as <public-url> + CallbackPath.
+const CallbackPath = "/api/oauth/callback"
+
+// refreshSkew refreshes a little BEFORE expiry so an in-flight connect never races the deadline.
+const refreshSkew = 60 * time.Second
+
+// Config is the NON-secret discovery + client result (safe to show); ClientSecret is the one sensitive
+// field (empty for public PKCE clients, which is the MCP default).
+// kw: oauth config endpoints client discovery
+type Config struct {
+	Resource              string   `json:"resource"` // the MCP server audience (RFC 8707)
+	Issuer                string   `json:"issuer,omitempty"`
+	AuthorizationEndpoint string   `json:"authorization_endpoint"`
+	TokenEndpoint         string   `json:"token_endpoint"`
+	RegistrationEndpoint  string   `json:"registration_endpoint,omitempty"`
+	ClientID              string   `json:"client_id"`
+	ClientSecret          string   `json:"client_secret,omitempty"`
+	Scopes                []string `json:"scopes,omitempty"`
+}
+
+// Tokens is the sensitive half: what actually authorizes downstream calls.
+// kw: oauth tokens access refresh expiry
+type Tokens struct {
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	TokenType    string    `json:"token_type,omitempty"`
+	Expiry       time.Time `json:"expiry,omitempty"`
+}
+
+// State is the full persisted per-server record.
+// kw: oauth state config tokens persisted
+type State struct {
+	Config Config `json:"config"`
+	Tokens Tokens `json:"tokens"`
+}
+
+// Authorized reports whether a usable access token is on file.
+func (s State) Authorized() bool { return s.Tokens.AccessToken != "" }
+
+// ---- file-backed store (data/oauth/<server>.json, 0600) --------------------------------------------
+
+// Store persists one State per server as JSON under Dir. Both stag-serve (writes on callback) and
+// stag-proxy (refreshes at connect) point at the same Dir on the shared data volume.
+// kw: oauth store dir load save file
+type Store struct{ Dir string }
+
+func (s Store) path(server string) string { return filepath.Join(s.Dir, safeName(server)+".json") }
+
+// Load reads a server's oauth state; a missing file is reported so callers can say "not authorized".
+func (s Store) Load(server string) (State, error) {
+	b, err := os.ReadFile(s.path(server))
+	if err != nil {
+		return State{}, err
+	}
+	var st State
+	if err := json.Unmarshal(b, &st); err != nil {
+		return State{}, fmt.Errorf("oauth: corrupt state for %q: %w", server, err)
+	}
+	return st, nil
+}
+
+// Save writes a server's state atomically (temp + rename), 0600, creating Dir 0700 on first use.
+func (s Store) Save(server string, st State) error {
+	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := s.path(server) + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.path(server))
+}
+
+// Bearer returns a fresh access token for server, refreshing if it is within refreshSkew of expiry.
+// It is the connect-time resolver: the proxy maps an oauth scheme to a bearer credential through this.
+// A missing/empty state yields an error (fail closed — no token, no downstream call).
+// kw: oauth bearer resolve refresh connect
+func (s Store) Bearer(ctx context.Context, hc *http.Client, server string) (string, error) {
+	st, err := s.Load(server)
+	if err != nil {
+		return "", fmt.Errorf("oauth: %q not authorized (run sign-in): %w", server, err)
+	}
+	if !st.Authorized() {
+		return "", fmt.Errorf("oauth: %q has no access token (run sign-in)", server)
+	}
+	if !st.Tokens.Expiry.IsZero() && time.Until(st.Tokens.Expiry) <= refreshSkew {
+		if st.Tokens.RefreshToken == "" {
+			return "", fmt.Errorf("oauth: %q token expired and no refresh token (re-run sign-in)", server)
+		}
+		nt, rerr := st.Config.Refresh(ctx, hc, st.Tokens.RefreshToken)
+		if rerr != nil {
+			return "", fmt.Errorf("oauth: refresh for %q failed: %w", server, rerr)
+		}
+		if nt.RefreshToken == "" { // provider did not rotate: keep the existing one
+			nt.RefreshToken = st.Tokens.RefreshToken
+		}
+		st.Tokens = nt
+		if serr := s.Save(server, st); serr != nil {
+			return "", serr
+		}
+	}
+	return st.Tokens.AccessToken, nil
+}
+
+// ---- discovery (RFC 9728 protected-resource -> RFC 8414 authorization-server) ----------------------
+
+// Discover resolves the authorization + token (+ registration) endpoints for an MCP server URL. It
+// tries the protected-resource metadata first (which names the authorization server), then the AS
+// metadata; if neither is served it falls back to the MCP origin's well-known AS document, then to
+// conventional /authorize + /token paths. Robust to the common case where a server serves only some of
+// these documents. The returned Config has NO client yet — call Register (or set a pre-registered ID).
+// kw: oauth discover metadata protected-resource authorization-server well-known
+func Discover(ctx context.Context, hc *http.Client, mcpURL string) (Config, error) {
+	hc = clientOr(hc)
+	origin, err := originOf(mcpURL)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg := Config{Resource: mcpURL}
+
+	// 1) protected-resource metadata -> the authorization server issuer(s)
+	issuer := origin
+	var prm struct {
+		AuthorizationServers []string `json:"authorization_servers"`
+		Resource             string   `json:"resource"`
+	}
+	if getJSON(ctx, hc, origin+"/.well-known/oauth-protected-resource", &prm) == nil {
+		if prm.Resource != "" {
+			cfg.Resource = prm.Resource
+		}
+		if len(prm.AuthorizationServers) > 0 {
+			issuer = strings.TrimRight(prm.AuthorizationServers[0], "/")
+		}
+	}
+
+	// 2) authorization-server metadata (RFC 8414, then OIDC discovery) at the issuer
+	var asm struct {
+		Issuer                string `json:"issuer"`
+		AuthorizationEndpoint string `json:"authorization_endpoint"`
+		TokenEndpoint         string `json:"token_endpoint"`
+		RegistrationEndpoint  string `json:"registration_endpoint"`
+	}
+	ok := getJSON(ctx, hc, issuer+"/.well-known/oauth-authorization-server", &asm) == nil && asm.TokenEndpoint != ""
+	if !ok {
+		ok = getJSON(ctx, hc, issuer+"/.well-known/openid-configuration", &asm) == nil && asm.TokenEndpoint != ""
+	}
+	if ok {
+		cfg.Issuer = firstNonEmpty(asm.Issuer, issuer)
+		cfg.AuthorizationEndpoint = asm.AuthorizationEndpoint
+		cfg.TokenEndpoint = asm.TokenEndpoint
+		cfg.RegistrationEndpoint = asm.RegistrationEndpoint
+		return cfg, nil
+	}
+
+	// 3) last-resort conventional endpoints on the issuer origin
+	cfg.Issuer = issuer
+	cfg.AuthorizationEndpoint = issuer + "/authorize"
+	cfg.TokenEndpoint = issuer + "/token"
+	return cfg, nil
+}
+
+// Register performs RFC 7591 dynamic client registration when the AS advertises an endpoint, yielding a
+// client_id (and client_secret for confidential clients). MCP clients are typically PUBLIC and use PKCE,
+// so we request token_endpoint_auth_method "none". When there is no registration endpoint, the caller
+// must have supplied a pre-registered ClientID.
+// kw: oauth register dcr dynamic client
+func Register(ctx context.Context, hc *http.Client, cfg Config, redirectURI, clientName string) (Config, error) {
+	if cfg.ClientID != "" || cfg.RegistrationEndpoint == "" {
+		return cfg, nil // pre-registered, or DCR unsupported (caller validates ClientID presence)
+	}
+	req := map[string]any{
+		"redirect_uris":              []string{redirectURI},
+		"token_endpoint_auth_method": "none",
+		"grant_types":                []string{"authorization_code", "refresh_token"},
+		"response_types":             []string{"code"},
+		"client_name":                clientName,
+	}
+	if len(cfg.Scopes) > 0 {
+		req["scope"] = strings.Join(cfg.Scopes, " ")
+	}
+	body, _ := json.Marshal(req)
+	var out struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if err := postJSON(ctx, clientOr(hc), cfg.RegistrationEndpoint, body, &out); err != nil {
+		return cfg, fmt.Errorf("oauth: dynamic client registration failed: %w", err)
+	}
+	if out.ClientID == "" {
+		return cfg, fmt.Errorf("oauth: registration returned no client_id")
+	}
+	cfg.ClientID, cfg.ClientSecret = out.ClientID, out.ClientSecret
+	return cfg, nil
+}
+
+// PKCE returns a fresh (verifier, S256 challenge) pair.
+// kw: oauth pkce verifier challenge s256
+func PKCE() (verifier, challenge string) {
+	verifier = randB64(64)
+	sum := sha256.Sum256([]byte(verifier))
+	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
+	return
+}
+
+// NewState returns a random opaque state token (CSRF + pending-flow key).
+func NewState() string { return randB64(32) }
+
+// AuthCodeURL builds the authorization-endpoint URL for the browser to open, carrying PKCE + the
+// resource indicator (RFC 8707) so the AS mints a token audience-bound to this MCP server.
+// kw: oauth auth-code url authorize pkce resource
+func (c Config) AuthCodeURL(redirectURI, state, challenge string) string {
+	q := url.Values{}
+	q.Set("response_type", "code")
+	q.Set("client_id", c.ClientID)
+	q.Set("redirect_uri", redirectURI)
+	q.Set("state", state)
+	q.Set("code_challenge", challenge)
+	q.Set("code_challenge_method", "S256")
+	if c.Resource != "" {
+		q.Set("resource", c.Resource)
+	}
+	if len(c.Scopes) > 0 {
+		q.Set("scope", strings.Join(c.Scopes, " "))
+	}
+	sep := "?"
+	if strings.Contains(c.AuthorizationEndpoint, "?") {
+		sep = "&"
+	}
+	return c.AuthorizationEndpoint + sep + q.Encode()
+}
+
+// Exchange trades an authorization code (+ PKCE verifier) for tokens at the token endpoint.
+// kw: oauth exchange authorization-code token
+func (c Config) Exchange(ctx context.Context, hc *http.Client, redirectURI, code, verifier string) (Tokens, error) {
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	form.Set("redirect_uri", redirectURI)
+	form.Set("client_id", c.ClientID)
+	form.Set("code_verifier", verifier)
+	if c.Resource != "" {
+		form.Set("resource", c.Resource)
+	}
+	return c.tokenRequest(ctx, hc, form)
+}
+
+// Refresh trades a refresh token for a new access token.
+// kw: oauth refresh token grant
+func (c Config) Refresh(ctx context.Context, hc *http.Client, refreshToken string) (Tokens, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", c.ClientID)
+	if c.Resource != "" {
+		form.Set("resource", c.Resource)
+	}
+	if len(c.Scopes) > 0 {
+		form.Set("scope", strings.Join(c.Scopes, " "))
+	}
+	return c.tokenRequest(ctx, hc, form)
+}
+
+func (c Config) tokenRequest(ctx context.Context, hc *http.Client, form url.Values) (Tokens, error) {
+	if c.ClientSecret != "" { // confidential client: authenticate the token request
+		form.Set("client_secret", c.ClientSecret)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return Tokens{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	resp, err := clientOr(hc).Do(req)
+	if err != nil {
+		return Tokens{}, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode/100 != 2 {
+		return Tokens{}, fmt.Errorf("oauth: token endpoint %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	var raw struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int64  `json:"expires_in"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return Tokens{}, fmt.Errorf("oauth: bad token response: %w", err)
+	}
+	if raw.AccessToken == "" {
+		return Tokens{}, fmt.Errorf("oauth: token response had no access_token")
+	}
+	t := Tokens{AccessToken: raw.AccessToken, RefreshToken: raw.RefreshToken, TokenType: raw.TokenType}
+	if raw.ExpiresIn > 0 {
+		t.Expiry = time.Now().Add(time.Duration(raw.ExpiresIn) * time.Second)
+	}
+	return t, nil
+}
+
+// ---- helpers ---------------------------------------------------------------------------------------
+
+func clientOr(hc *http.Client) *http.Client {
+	if hc != nil {
+		return hc
+	}
+	return &http.Client{Timeout: 20 * time.Second}
+}
+
+func originOf(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("oauth: invalid server URL %q", raw)
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func getJSON(ctx context.Context, hc *http.Client, u string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("GET %s: %d", u, resp.StatusCode)
+	}
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	return json.Unmarshal(b, out)
+}
+
+func postJSON(ctx context.Context, hc *http.Client, u string, body []byte, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("POST %s: %d: %s", u, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return json.Unmarshal(b, out)
+}
+
+func randB64(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// safeName constrains a server name to a filesystem-safe basename (it becomes a filename).
+func safeName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "_"
+	}
+	return b.String()
+}
