@@ -79,7 +79,7 @@ jobs:
       - name: compose config is valid
         run: |
           # the ${VAR:?} guards make compose refuse to run without real secrets; supply throwaways
-          STAG_ADMIN_TOKEN=ci STAG_APPROVE_TOKEN=ci STAG_DISPATCH_TOKEN=ci HARNESS_OPERATOR_TOKEN=ci \
+          STAG_CONSOLE_TOKEN=ci STAG_DISPATCH_TOKEN=ci HARNESS_OPERATOR_TOKEN=ci \
             docker compose config -q
 
   # The SBOM is regenerated on every push and attached to the run. A stale SBOM is worse than none,

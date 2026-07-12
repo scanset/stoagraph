@@ -1,21 +1,20 @@
 // Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running,
 // authenticated gate with a working demo.
 //
-//	stoagraph up      mint the role secrets, pull the signed images, start, print your tokens
-//	stoagraph demo    load the containment demo (no model or API key needed)
-//	stoagraph down    stop
-//	stoagraph tokens  print the control-plane tokens again
+//	stoagraph up       mint the secrets, pull the signed images, start, print the login link
+//	stoagraph console  print the one-click login link again
+//	stoagraph demo     load the containment demo (no model or API key needed)
+//	stoagraph down     stop
 //
-// WHY THIS EXISTS AND NOT A `docker run` ONE-LINER: the control plane uses per-role secrets, and
-// `approve` — the token that releases a held action — must never reach the orchestrator's environment.
-// Something has to mint four distinct secrets and hand each service only what it is entitled to,
-// BEFORE anything starts. That is the step a single `docker run` cannot do, and it is exactly the thing
-// we deliberately made impossible to shortcut. So the installer does it, and then gets out of the way.
+// WHY THIS EXISTS AND NOT A `docker run` ONE-LINER: the control plane uses role-scoped secrets, and the
+// approve-capable one must never reach the orchestrator's environment — otherwise a compromised
+// orchestrator could approve its own escalations. Something has to mint the secrets and hand each
+// service only what it is entitled to, BEFORE anything starts. A single `docker run` cannot do that.
 //
 // It holds no secrets itself: it writes .env (0600) and never transmits it anywhere.
 package main
 
-// file-kw: cli installer launcher up down demo tokens compose ghcr role-secrets mint no-shortcut
+// file-kw: cli installer launcher up down demo console login-link compose ghcr role-secrets mint one-click
 
 import (
 	"crypto/rand"
@@ -61,8 +60,8 @@ func main() {
 		err = compose("down")
 	case "demo":
 		err = demo()
-	case "tokens":
-		err = printTokens()
+	case "console", "login", "url":
+		err = loginLink()
 	case "version":
 		fmt.Println("stoagraph", Version)
 	default:
@@ -77,10 +76,10 @@ func main() {
 func usage() {
 	fmt.Print(`stoagraph — verifiable control for AI agents
 
-  stoagraph up      mint role secrets, pull the images, start, print your tokens
-  stoagraph demo    load the containment demo (no model or API key needed)
-  stoagraph tokens  print the control-plane tokens
-  stoagraph down    stop everything
+  stoagraph up       mint secrets, pull the images, start, print your one-click login link
+  stoagraph console  print the login link again
+  stoagraph demo     load the containment demo (no model or API key needed)
+  stoagraph down     stop everything
   stoagraph version
 
 Docs: https://github.com/scanset/stoagraph
@@ -101,8 +100,8 @@ func up() error {
 		}
 	}
 
-	// 2. the four role secrets. This is the step that cannot be skipped: `approve` is minted here and
-	//    injected ONLY into the gate, never into the orchestrator.
+	// 2. the secrets. This is the step that cannot be skipped: the approve-capable secret is minted here
+	//    and injected ONLY into the gate, never into the orchestrator.
 	if _, err := os.Stat(".env"); os.IsNotExist(err) {
 		fmt.Println("== minting control-plane role secrets (.env, 0600) ==")
 		if err := genEnv(); err != nil {
@@ -128,13 +127,28 @@ func up() error {
 	}
 	fmt.Println(" ready ==")
 
-	if err := printTokens(); err != nil {
+	return loginLink()
+}
+
+// loginLink prints the one-click console login. The two role-scoped keys the browser needs ride in the
+// URL fragment (#...), which browsers never send to a server and which the console strips from the bar
+// after reading. No copy-pasting a raw token.
+func loginLink() error {
+	console, err := envToken("STAG_CONSOLE_TOKEN")
+	if err != nil {
 		return err
 	}
-	fmt.Print(`
-  console   http://localhost:3000
-  demo      stoagraph demo      (no model or API key needed)
-`)
+	operator, err := envToken("HARNESS_OPERATOR_TOKEN")
+	if err != nil {
+		return err
+	}
+	fmt.Printf(`
+  Log in — open this once (the keys are in the # fragment; the console stores them and strips them):
+
+    http://localhost:3000/#c=%s&o=%s
+
+  Then:  stoagraph demo      (watch an agent be stopped from leaking an SSN — no API key needed)
+`, console, operator)
 	return nil
 }
 
@@ -142,7 +156,7 @@ func up() error {
 // — a security control must not arrive already permitting something you never authored — so this is the
 // explicit "yes, I meant it" step.
 func demo() error {
-	tok, err := envToken("STAG_ADMIN_TOKEN")
+	tok, err := envToken("STAG_CONSOLE_TOKEN")
 	if err != nil {
 		return err
 	}
@@ -197,13 +211,17 @@ func demo() error {
 	return nil
 }
 
-// genEnv mints four INDEPENDENT secrets. Independent is the whole point: compose injects each service
-// only the ones it is entitled to, so `approve` is not merely unused by the orchestrator — it is not in
-// its environment to be read.
+// genEnv mints THREE secrets. The split is the security boundary: the orchestrator is injected only
+// `operator` + `dispatch`, and NEITHER is the console/approve secret — so a compromised orchestrator
+// cannot forge a human decision. compose maps STAG_CONSOLE_TOKEN to admin AND approve on the gate.
 func genEnv() error {
 	var b strings.Builder
 	b.WriteString("# StoaGraph control-plane secrets. Keep private; rotate by deleting this file.\n")
-	for _, k := range []string{"STAG_ADMIN_TOKEN", "STAG_APPROVE_TOKEN", "STAG_DISPATCH_TOKEN", "HARNESS_OPERATOR_TOKEN"} {
+	for _, k := range []string{
+		"STAG_CONSOLE_TOKEN",     // your gate key: author policy + approve
+		"HARNESS_OPERATOR_TOKEN", // your orchestrator key: models + dispatch
+		"STAG_DISPATCH_TOKEN",    // MACHINE ONLY: the orchestrator binds sessions; it cannot approve
+	} {
 		s, err := secret()
 		if err != nil {
 			return err
@@ -213,28 +231,6 @@ func genEnv() error {
 	fmt.Fprintf(&b, "STOAGRAPH_VERSION=%s\n", Version)
 	fmt.Fprintf(&b, "HOST_UID=%d\nHOST_GID=%d\n", os.Getuid(), os.Getgid())
 	return os.WriteFile(".env", []byte(b.String()), 0o600)
-}
-
-func printTokens() error {
-	admin, err := envToken("STAG_ADMIN_TOKEN")
-	if err != nil {
-		return err
-	}
-	approve, _ := envToken("STAG_APPROVE_TOKEN")
-	operator, _ := envToken("HARNESS_OPERATOR_TOKEN")
-	fmt.Printf(`
-  Paste these into the console sidebar:
-
-    gate token          (admin)     %s
-    orchestrator token  (operator)  %s
-
-  Keep this one for when you mean it — it is what RELEASES a held action:
-
-    approve                         %s
-
-  The orchestrator holds neither. It waits on a human; it can never be one.
-`, admin, operator, approve)
-	return nil
 }
 
 func secret() (string, error) {

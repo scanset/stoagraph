@@ -442,6 +442,6 @@ Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the
 **kw:** cmd · stag-serve · http · api · console · backend · gating · proxy · decide · log
 
 ### `stoa-kernel/cmd/stoagraph/main.go`
-Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up      mint the role secrets, pull the signed images, start, print 
+Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up       mint the secrets, pull the signed images, start, print the 
 
-**kw:** cli · installer · launcher · up · down · demo · tokens · compose · ghcr · role-secrets · mint · no-shortcut
+**kw:** cli · installer · launcher · up · down · demo · console · login-link · compose · ghcr · role-secrets · mint · one-click

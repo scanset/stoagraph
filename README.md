@@ -123,9 +123,9 @@ one filesystem and make that impossible to prevent. See [docs/docker.md](docs/do
 must not arrive already permitting something you never authored. You load policy by running an example
 (`tools/demo.sh`) or by authoring it in the console. The gate creates its own `data/` on first boot.
 
-`tools/up.sh` prints four tokens. Paste the **gate** token (`admin`) and the **orchestrator** token
-(`operator`) into the console sidebar. Keep `approve` for when you mean it — it is the one that releases
-a held action.
+`stoagraph up` prints a **one-click login link** — open it once and you are in. (No copy-pasting a
+token: the keys ride in the URL fragment, which never leaves your browser; the console stores them and
+strips them from the address bar.) Reprint it any time with `stoagraph console`.
 
 To connect a model, copy `config/models.example.json` to `config/models.json` and add a key. **The gate
 never sees it.**

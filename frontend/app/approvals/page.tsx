@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { approveApproval, denyApproval, listApprovals, type ApprovalView } from "../lib/api";
+import { isLoggedIn } from "../lib/session";
 
 const STATUS: Record<string, { label: string; color: string; soft: string }> = {
   pending: { label: "PENDING", color: "var(--escalate)", soft: "var(--escalate-soft)" },
@@ -18,8 +19,12 @@ export default function ApprovalsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [minted, setMinted] = useState<Record<string, string>>({}); // id -> "keyId" note after approve
   const [offline, setOffline] = useState(false);
+  const [authed, setAuthed] = useState(true);
 
   const refresh = useCallback(() => {
+    // Not signed in is not "offline" — do not send an operator hunting for a dead server.
+    setAuthed(isLoggedIn());
+    if (!isLoggedIn()) return;
     listApprovals(filter === "pending" ? "pending" : undefined)
       .then((r) => {
         setRows(r);
@@ -70,7 +75,7 @@ export default function ApprovalsPage() {
         <div className="flex items-baseline gap-3">
           <h1 className="text-[15px] font-semibold tracking-tight">Approvals</h1>
           <span className="text-sm text-[var(--faint)]">
-            {offline ? "backend offline" : `${pendingCount} awaiting a signed release`}
+            {!authed ? "sign in to view approvals" : offline ? "backend offline" : `${pendingCount} awaiting a signed release`}
           </span>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getLog, getToken, setToken, type LogView } from "../lib/api";
-import { getOperatorToken, setOperatorToken } from "../lib/harness";
+import { getLog, setToken, type LogView } from "../lib/api";
+import { setOperatorToken } from "../lib/harness";
+import { adoptLoginFromURL, isLoggedIn, signOut } from "../lib/session";
 
 // One console, two backends (Planning/26): the GATE (stag-serve) holds policy/approvals and no keys;
 // the ORCHESTRATOR (harness-serve) holds the models and dispatches. Only the UI is unified — keeping
@@ -23,6 +24,14 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [log, setLog] = useState<LogView | null>(null);
   const [reload, setReload] = useState(0);
+  const [authed, setAuthed] = useState(false);
+
+  // One-click login: if `stoagraph up`'s link put keys in the URL fragment, adopt them and drop them
+  // from the address bar. Then reflect whether we are signed in.
+  useEffect(() => {
+    if (adoptLoginFromURL()) setReload((n) => n + 1);
+    setAuthed(isLoggedIn());
+  }, [reload]);
 
   useEffect(() => {
     getLog().then(setLog).catch(() => setLog(null));
@@ -54,34 +63,104 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="mt-auto border-t border-[var(--border)] p-4">
-        <TokenBox
-          label="gate token"
-          hint="admin / approve"
-          connected={!!log}
-          read={getToken}
-          write={setToken}
-          onSaved={() => setReload((n) => n + 1)}
-        />
-        <div className="mt-2">
-          <TokenBox
-            label="orchestrator token"
-            hint="operator"
-            read={getOperatorToken}
-            write={setOperatorToken}
-            onSaved={() => setReload((n) => n + 1)}
-          />
-        </div>
+        <SessionBox authed={authed} connected={!!log} onChange={() => setReload((n) => n + 1)} />
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
           <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: log ? "var(--allow)" : "var(--deny)" }} />
             gating MCP proxy · self-hosted
           </div>
           <div className="mt-1.5 font-mono text-[11px] text-[var(--faint)]">
-            {log ? `${log.verify.count} crossings · ${log.verify.signed ? "signed" : "rung-1"}` : "no data — check token"}
+            {log ? `${log.verify.count} crossings · ${log.verify.signed ? "signed" : "rung-1"}` : authed ? "no data yet" : "sign in to see records"}
           </div>
         </div>
       </div>
     </aside>
+  );
+}
+
+/* The whole login story, in one box. Normally the human never touches it: `stoagraph up` prints a link
+ * that carries the two keys in the URL fragment, the console adopts them, and this shows "signed in".
+ * The manual fallback exists only for a device where you cannot use that link. */
+function SessionBox({ authed, connected, onChange }: { authed: boolean; connected: boolean; onChange: () => void }) {
+  const [manual, setManual] = useState(false);
+
+  if (authed) {
+    return (
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-xs text-[var(--muted)]">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: connected ? "var(--allow)" : "var(--escalate)" }}
+            />
+            {connected ? "signed in" : "signed in · gate unreachable"}
+          </span>
+          <button
+            onClick={() => {
+              signOut();
+              onChange();
+            }}
+            className="text-[11px] text-[var(--faint)] transition hover:text-[var(--deny)]"
+          >
+            sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+      <div className="text-xs font-medium text-[var(--muted)]">Not signed in</div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--faint)]">
+        Run <code className="text-[var(--text)]">stoagraph up</code> (or{" "}
+        <code className="text-[var(--text)]">stoagraph console</code>) and open the link it prints.
+      </p>
+      <button
+        onClick={() => setManual((m) => !m)}
+        className="mt-1.5 text-[11px] text-[var(--faint)] underline-offset-2 hover:underline"
+      >
+        {manual ? "hide" : "paste keys manually"}
+      </button>
+      {manual && <ManualLogin onDone={onChange} />}
+    </div>
+  );
+}
+
+function ManualLogin({ onDone }: { onDone: () => void }) {
+  const [c, setC] = useState("");
+  const [o, setO] = useState("");
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      <input
+        type="password"
+        value={c}
+        onChange={(e) => setC(e.target.value)}
+        placeholder="console key"
+        autoComplete="off"
+        spellCheck={false}
+        className="w-full rounded border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[11px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+      />
+      <input
+        type="password"
+        value={o}
+        onChange={(e) => setO(e.target.value)}
+        placeholder="operator key"
+        autoComplete="off"
+        spellCheck={false}
+        className="w-full rounded border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[11px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+      />
+      <button
+        onClick={() => {
+          if (c) setToken(c.trim());
+          if (o) setOperatorToken(o.trim());
+          onDone();
+        }}
+        className="rounded border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--text)]"
+      >
+        save
+      </button>
+    </div>
   );
 }
 

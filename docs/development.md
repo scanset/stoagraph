@@ -52,10 +52,11 @@ If that test goes red, it is not a style violation. The claim is false and the b
 | `kbserve` | 8095 | Example context provider (the READ channel's downstream). |
 | console | 3000 | One UI, talking to both backends. |
 
-The console holds the **human's** tokens (`admin` / `approve` for the gate, `operator` for the
-orchestrator). The orchestrator *process* holds only `dispatch` — it can bind sessions and poll for an
-approval decision, but it **can never approve**. Do not "fix" a 401 by handing it a stronger token; that
-401 is the human-in-the-loop working.
+Three secrets (`stoagraph up` mints them, `.env`): **console** (author policy + approve),
+**operator** (models + dispatch), **dispatch** (machine-only — the orchestrator binds sessions, and
+**cannot approve**). Your login link carries console + operator; you never handle dispatch. The one rule
+that makes the whole thing safe: the orchestrator is never given an approve-capable secret. Do not
+"fix" a 401 by handing it a stronger token — that 401 is the human-in-the-loop working.
 
 ## Paths
 

@@ -1,7 +1,7 @@
 # Docker
 
 ```bash
-stoagraph up      # mints the four role secrets, pulls the signed images, starts
+stoagraph up      # mints the secrets, pulls the signed images, starts, prints your login link
 stoagraph demo    # loads the containment demo
 ```
 
@@ -44,29 +44,31 @@ rather than dropping `curl` into the image.
 Because the secrets would all end up on one filesystem, and that **structurally defeats the
 human-in-the-loop guarantee.**
 
-The control plane uses per-role secrets, and `approve` — the one that releases a held action — belongs
-to a human. If the orchestrator can reach it, a compromised orchestrator approves its own escalations.
-And the gate's HTTP role check does **not** save you there: a compromised orchestrator would not send
-`dispatch` to an approve route and politely accept the 401. It would send the `approve` token it was
-holding.
+## The three secrets
 
-So no container mounts the tokens file, and each service is injected only what it is entitled to. The
-`environment:` blocks in `compose.yml` **are** the access-control matrix:
+There are three, and the split is the entire point. What must be true: the orchestrator — which runs
+untrusted model output — can never approve its own escalations. That is only enforceable if the token
+it holds is a **different secret** from the one that approves. (The gate's HTTP role check alone does
+not save you: a compromised orchestrator would not send its token to `/approve` and accept the 401 —
+it would send whatever approve-capable secret it was holding. So it holds none.)
 
-| Service | Secrets it receives |
-|---|---|
-| `stag-serve` | `admin`, `approve`, `dispatch` — it verifies all three |
-| `stag-proxy` | `dispatch` — it only guards `POST /sessions` |
-| **`harness-serve`** | **`dispatch`, `operator` — never `approve`.** Not "unused": *absent*. |
-| `kbserve` | none |
-| `console` | none — the human types their token into the browser |
+| Secret | What it does | Held by |
+|---|---|---|
+| **console** | author policy **and** approve held actions | you (via the login link) + `stag-serve` |
+| **operator** | connect models, dispatch events | you (via the login link) + `harness-serve` |
+| **dispatch** | bind sessions, poll approvals — **cannot approve** | `harness-serve` + `stag-proxy` (machine only) |
 
-Verify it yourself:
+Your login carries **console** + **operator** behind one link. **dispatch** is machine-only and never
+leaves a container. So no container mounts a tokens file, and — the line that matters — the orchestrator
+is injected `operator` + `dispatch` and **never** the console/approve secret. Verify it:
 
 ```bash
 docker inspect stoagraph-harness-serve-1 --format '{{range .Config.Env}}{{println .}}{{end}}' \
-  | grep -c "$(grep STAG_APPROVE_TOKEN .env | cut -d= -f2)"    # => 0
+  | grep -c "$(grep STAG_CONSOLE_TOKEN .env | cut -d= -f2)"    # => 0
 ```
+
+(Want an operator-vs-approver split — a junior who can operate but not approve? Give `admin` and
+`approve` different values in `.env`. The default keeps them the same because both are just "you".)
 
 ## Model API keys
 

@@ -148,7 +148,7 @@
       "symbols": []
     },
     {
-      "doc": "Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up      mint the role secrets, pull the signed images, start, print ",
+      "doc": "Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up       mint the secrets, pull the signed images, start, print the ",
       "keywords": [
         "cli",
         "installer",
@@ -156,12 +156,13 @@
         "up",
         "down",
         "demo",
-        "tokens",
+        "console",
+        "login-link",
         "compose",
         "ghcr",
         "role-secrets",
         "mint",
-        "no-shortcut"
+        "one-click"
       ],
       "layer": "binary",
       "package": "main",

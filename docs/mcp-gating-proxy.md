@@ -79,7 +79,7 @@ human-approval flow (approve → signed release → the retried call is forwarde
 
 ## Control plane
 
-Authenticated by default. Four role tokens are generated (`0600`) into `data/control.tokens` on the
+Authenticated by default. Role tokens are generated (`0600`) into `data/control.tokens` on the
 gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
 
 - `POST /sessions` (bind a session — it *chooses the recipe*) requires the **`dispatch`** role.

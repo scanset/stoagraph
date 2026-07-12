@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# tools/gen-env.sh — mint the four control-plane role secrets into .env (gitignored) for compose.
+# tools/gen-env.sh — mint the control-plane secrets into .env (gitignored) for compose.
 #
-# compose injects these per-service, so each container gets ONLY what it is entitled to and NO
-# container mounts a tokens file. In particular the orchestrator never receives `approve`: it waits
-# on a human decision, it can never forge one.
+# THREE secrets, injected per-service by compose so each container holds only what it is entitled to.
+# The one that matters: the orchestrator never receives the console/approve secret, so it can never
+# forge a human decision. It waits on a human; it cannot be one.
+#
+#   STAG_CONSOLE_TOKEN     the human's gate key — author policy + approve. (compose maps it to
+#                          STAG_ADMIN_TOKEN and STAG_APPROVE_TOKEN.)
+#   HARNESS_OPERATOR_TOKEN the human's orchestrator key — models + dispatch.
+#   STAG_DISPATCH_TOKEN    MACHINE ONLY — the orchestrator process binds sessions with it. Never typed.
+#
+# Prefer `stoagraph up`, which does this and prints a one-click login link.
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
@@ -12,10 +19,13 @@ cd "$(dirname "$0")/.." || exit 1
 gen() { head -c32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 cat > .env <<ENV
 # StoaGraph control-plane secrets. GITIGNORED. Rotate by deleting this file and re-running.
-STAG_ADMIN_TOKEN=$(gen)
-STAG_APPROVE_TOKEN=$(gen)
-STAG_DISPATCH_TOKEN=$(gen)
+
+# Your login (the console needs both; they ride behind one link — see: stoagraph console)
+STAG_CONSOLE_TOKEN=$(gen)
 HARNESS_OPERATOR_TOKEN=$(gen)
+
+# Machine-only. The orchestrator PROCESS uses this to bind sessions; it CANNOT approve. Never typed.
+STAG_DISPATCH_TOKEN=$(gen)
 
 # The orchestrator container runs as this uid so it can read your private config/models.json.
 HOST_UID=$(id -u)
@@ -28,8 +38,5 @@ HOST_GID=$(id -g)
 ENV
 chmod 600 .env
 
-echo "wrote .env (0600). Paste these into the console sidebar:"
-grep -E 'ADMIN|OPERATOR' .env | sed 's/^/  /'
-echo
-echo "  APPROVE releases a held action — keep it for when you mean it."
-echo "  DISPATCH is the orchestrator's; you never type it anywhere."
+echo "wrote .env (0600)."
+echo "  then: docker compose up -d   (or: stoagraph up, which also prints your login link)"

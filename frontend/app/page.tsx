@@ -1,5 +1,6 @@
 "use client";
 
+import { isLoggedIn } from "./lib/session";
 import { useCallback, useEffect, useState } from "react";
 import {
   decide,
@@ -36,6 +37,7 @@ export default function Page() {
   const [value, setValue] = useState("hello");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [authed, setAuthed] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const refreshLog = useCallback(() => {
@@ -43,6 +45,10 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    // A 401 means "not signed in", which is NOT the same as "backend offline" — reporting the former
+    // as the latter sends people hunting for a dead server when they just need to log in.
+    setAuthed(isLoggedIn());
+    if (!isLoggedIn()) return;
     getPolicies()
       .then((p) => {
         setPolicy(p[0] ?? null);
@@ -74,7 +80,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar connected={connected} policy={policy} />
+      <Topbar connected={connected} authed={authed} policy={policy} />
       <div className="flex-1 overflow-auto p-6">
         <DecideBar
           policy={policy}
@@ -98,7 +104,24 @@ export default function Page() {
 
 /* ------------------------------ topbar ------------------------------ */
 
-function Topbar({ connected, policy }: { connected: boolean | null; policy: PolicyView | null }) {
+function Topbar({
+  connected,
+  authed,
+  policy,
+}: {
+  connected: boolean | null;
+  authed: boolean;
+  policy: PolicyView | null;
+}) {
+  // Not signed in is its own state — a red "backend offline" here is a lie that costs someone an hour.
+  const status = !authed
+    ? "sign in — run `stoagraph up` and open the link"
+    : connected === false
+      ? "backend offline"
+      : connected
+        ? "connected"
+        : "connecting…";
+  const good = authed && connected !== false;
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-6">
       <div className="flex items-baseline gap-3">
@@ -109,15 +132,15 @@ function Topbar({ connected, policy }: { connected: boolean | null; policy: Poli
       </div>
       <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
         <span className="relative flex h-2 w-2">
-          {connected && (
+          {good && authed && connected && (
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--allow)] opacity-60" />
           )}
           <span
             className="relative inline-flex h-2 w-2 rounded-full"
-            style={{ background: connected === false ? "var(--deny)" : "var(--allow)" }}
+            style={{ background: !authed ? "var(--escalate)" : connected === false ? "var(--deny)" : "var(--allow)" }}
           />
         </span>
-        {connected === false ? "backend offline" : connected ? "connected" : "connecting…"}
+        {status}
       </div>
     </header>
   );
