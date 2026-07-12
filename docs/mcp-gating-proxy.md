@@ -90,7 +90,8 @@ gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
 ## Scope (v1)
 
 - **Scalar gated arguments.** A recipe gates named arguments (e.g. `namespace`, `replicas`), compared
-  as strings; non-scalar arguments are stringified.
+  as strings; non-scalar arguments are stringified. Which arguments a tool's policy judges is set by its
+  route — see [routes.md](routes.md).
 - **One downstream per proxy.** Fronting several MCP servers from a single gate is still a v1.1 item.
 - **`http` context providers.** The `rag` and `mcp_resource` provider kinds are reserved and fail closed
   (an unbuildable provider is dropped from the session, never fabricated). Keeping retrieval in a

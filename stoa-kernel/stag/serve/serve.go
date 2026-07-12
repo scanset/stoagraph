@@ -117,6 +117,21 @@ type DecisionView struct {
 	ApprovalID   string      `json:"approvalId,omitempty"` // set when an escalate awaits/holds a human approval
 }
 
+// RecordView is one leaf of the audit chain: a decision the gate made. EVERY decision is recorded —
+// allow, deny and escalate alike — because a blocked attempt is the evidence that the control worked.
+// Releases are the crossings that ACTUALLY happened, so they are present only when Forwarded is true.
+// (Distinct from DecisionView above, which is the /api/decide RESPONSE, not an audit leaf.)
+// kw: record view audit leaf tool verdict forwarded value recipe fault releases
+type RecordView struct {
+	Tool      string      `json:"tool"`
+	Verdict   string      `json:"verdict"` // allow | deny | escalate
+	Forwarded bool        `json:"forwarded"`
+	Value     string      `json:"value"`
+	Recipe    string      `json:"recipe,omitempty"`
+	Fault     string      `json:"fault,omitempty"`
+	Releases  []EventView `json:"releases,omitempty"`
+}
+
 // kw: verify view count head signed keyid verified error
 type VerifyView struct {
 	Count    int64  `json:"count"`
@@ -127,10 +142,10 @@ type VerifyView struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// kw: log view events verify
+// kw: log view decisions verify audit-chain
 type LogView struct {
-	Events []EventView `json:"events"`
-	Verify VerifyView  `json:"verify"`
+	Records []RecordView `json:"records"`
+	Verify  VerifyView   `json:"verify"`
 }
 
 // kw: handler mux routes api decide log policies health cors
@@ -290,13 +305,13 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	lv.Events = readEvents(b)
+	lv.Records = readRecords(b)
 	writeJSON(w, http.StatusOK, lv)
 }
 
-// kw: read events parse leaves to event views
-func readEvents(b []byte) []EventView {
-	var out []EventView
+// kw: read records parse leaves to audit views allow deny escalate releases
+func readRecords(b []byte) []RecordView {
+	var out []RecordView
 	for _, line := range bytes.Split(bytes.TrimRight(b, "\n"), []byte("\n")) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
@@ -305,10 +320,18 @@ func readEvents(b []byte) []EventView {
 		if json.Unmarshal(line, &lf) != nil {
 			continue
 		}
-		out = append(out, EventView{
-			Field: lf.Event.TargetField, Rule: lf.Event.AuthorizingRule,
-			Actor: lf.Event.Actor, Subject: lf.Event.SubjectClass.String(),
-		})
+		d := lf.Decision
+		dv := RecordView{
+			Tool: d.Tool, Verdict: d.Verdict, Forwarded: d.Forwarded,
+			Value: d.Value, Recipe: d.Recipe, Fault: d.Fault,
+		}
+		for _, ev := range d.Events { // releases: present only on a forwarded call
+			dv.Releases = append(dv.Releases, EventView{
+				Field: ev.TargetField, Rule: ev.AuthorizingRule,
+				Actor: ev.Actor, Subject: ev.SubjectClass.String(),
+			})
+		}
+		out = append(out, dv)
 	}
 	return out
 }

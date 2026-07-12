@@ -74,7 +74,7 @@ type Router map[string]Route
 
 // kw: sink egress record release event (egress.JSONLSink / broker.MemSink satisfy this)
 type Sink interface {
-	Record(ctx context.Context, ev stag.ReleaseEvent) error
+	Record(ctx context.Context, d stag.DecisionRecord) error
 }
 
 // kw: decision tool verdict forward value events fault approval-id
@@ -100,8 +100,12 @@ type Gate struct {
 func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 	route, ok := g.Routes[call.Tool]
 	if !ok {
-		// fail closed (inv 8/10): a tool with no policy is denied, never forwarded.
-		return Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Fault: "no recipe for tool " + call.Tool}
+		// fail closed (inv 8/10): a tool with no policy is denied, never forwarded. It is still RECORDED
+		// — "the agent reached for a tool it was never granted" is exactly the evidence an auditor wants,
+		// and dropping it would leave the most suspicious call of all invisible.
+		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Fault: "no recipe for tool " + call.Tool}
+		g.record(ctx, d, "", "")
+		return d
 	}
 
 	// GateArg is one arg name (single-arg), or a comma-separated list (multi-arg): each listed
@@ -163,14 +167,37 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 		}
 	}
 
-	// egress is best-effort and off the enforcement decision (inv 9): record the crossings the
-	// kernel emitted; a sink error does not change the Decision.
-	if g.Sink != nil {
-		for _, ev := range res.Events {
-			_ = g.Sink.Record(ctx, ev)
-		}
+	d := Decision{Tool: call.Tool, Verdict: res.Verdict, Forward: forward, Value: value, Events: res.Events, Fault: res.Fault, ApprovalID: approvalIDForView(res.Verdict, approvedID, fingerprint, needsApproval)}
+	g.record(ctx, d, route.RecipeName, route.RecipeHash)
+	return d
+}
+
+// record writes exactly ONE leaf per decision — allow, deny, or escalate alike.
+//
+// Releases ride along ONLY when the call was forwarded. A multi-arg recipe evaluates every sink, so a
+// DENIED call can still have individually-cleared sinks (owner=mallory fails while repo=stoagraph
+// passes). Recording those as releases would put a crossing in the tamper-evident log that never
+// happened — the audit would claim the agent read a repo the gate actually blocked. The record states
+// what HAPPENED, not what merely evaluated.
+//
+// Egress stays best-effort and off the enforcement path (inv 9): a sink error never changes the verdict.
+func (g Gate) record(ctx context.Context, d Decision, recipeName, recipeHash string) {
+	if g.Sink == nil {
+		return
 	}
-	return Decision{Tool: call.Tool, Verdict: res.Verdict, Forward: forward, Value: value, Events: res.Events, Fault: res.Fault, ApprovalID: approvalIDForView(res.Verdict, approvedID, fingerprint, needsApproval)}
+	rec := stag.DecisionRecord{
+		Tool:       d.Tool,
+		Verdict:    d.Verdict.String(),
+		Forwarded:  d.Forward,
+		Value:      d.Value,
+		Recipe:     recipeName,
+		RecipeHash: recipeHash,
+		Fault:      d.Fault,
+	}
+	if d.Forward { // released iff forwarded
+		rec.Events = d.Events
+	}
+	_ = g.Sink.Record(ctx, rec)
 }
 
 // splitGateArg parses a GateArg into its arg names: one name (single-arg) or a comma-separated

@@ -29,10 +29,10 @@ const maxLeaf = 1 << 20 // 1 MiB: a single-leaf line ceiling (fail-closed on ove
 
 // kw: leaf seq prev-hash event chain-hash
 type Leaf struct {
-	Seq      int64             `json:"seq"`
-	PrevHash string            `json:"prev_hash"`
-	Event    stag.ReleaseEvent `json:"event"`
-	Hash     string            `json:"hash"`
+	Seq      int64               `json:"seq"`
+	PrevHash string              `json:"prev_hash"`
+	Decision stag.DecisionRecord `json:"decision"`
+	Hash     string              `json:"hash"`
 }
 
 // kw: verify result head count
@@ -67,10 +67,10 @@ func ResumeJSONLSink(w io.Writer, head string, seq int64) *JSONLSink {
 type DiscardSink struct{}
 
 // kw: discard sink record nothing simulator no audit
-func (DiscardSink) Record(context.Context, stag.ReleaseEvent) error { return nil }
+func (DiscardSink) Record(context.Context, stag.DecisionRecord) error { return nil }
 
-// kw: record append chained leaf fail-closed no-advance-on-error
-func (s *JSONLSink) Record(_ context.Context, ev stag.ReleaseEvent) error {
+// kw: record append chained leaf fail-closed no-advance-on-error one-leaf-per-decision
+func (s *JSONLSink) Record(_ context.Context, ev stag.DecisionRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -81,21 +81,21 @@ func (s *JSONLSink) Record(_ context.Context, ev stag.ReleaseEvent) error {
 	// reaches the fixpoint (invalid UTF-8 -> U+FFFD is stable thereafter).
 	raw, err := json.Marshal(ev)
 	if err != nil {
-		return fmt.Errorf("egress: marshal event: %w", err) // fail closed
+		return fmt.Errorf("egress: marshal decision: %w", err) // fail closed
 	}
-	var norm stag.ReleaseEvent
+	var norm stag.DecisionRecord
 	if err := json.Unmarshal(raw, &norm); err != nil {
-		return fmt.Errorf("egress: normalize event: %w", err)
+		return fmt.Errorf("egress: normalize decision: %w", err)
 	}
 	evHash, err := norm.Hash()
 	if err != nil {
-		return fmt.Errorf("egress: event hash: %w", err)
+		return fmt.Errorf("egress: decision hash: %w", err)
 	}
 	h, err := leafHash(s.seq, s.head, evHash)
 	if err != nil {
 		return fmt.Errorf("egress: leaf hash: %w", err)
 	}
-	leaf := Leaf{Seq: s.seq, PrevHash: s.head, Event: norm, Hash: h}
+	leaf := Leaf{Seq: s.seq, PrevHash: s.head, Decision: norm, Hash: h}
 	line, err := json.Marshal(leaf)
 	if err != nil {
 		return fmt.Errorf("egress: marshal: %w", err)
@@ -124,12 +124,12 @@ func (s *JSONLSink) Count() int64 {
 	return s.seq
 }
 
-// kw: leaf hash canonical seq prev event-hash
-func leafHash(seq int64, prevHash, eventHash string) (string, error) {
+// kw: leaf hash canonical seq prev decision-hash
+func leafHash(seq int64, prevHash, decisionHash string) (string, error) {
 	return stag.CanonicalHash(map[string]any{
-		"seq":        seq,
-		"prev_hash":  prevHash,
-		"event_hash": eventHash,
+		"seq":           seq,
+		"prev_hash":     prevHash,
+		"decision_hash": decisionHash,
 	})
 }
 
@@ -167,9 +167,9 @@ func Verify(r io.Reader) (VerifyResult, error) {
 		if lf.PrevHash != prev {
 			return VerifyResult{}, fmt.Errorf("egress: leaf %d: prev_hash mismatch (chain broken)", seq)
 		}
-		evHash, err := lf.Event.Hash()
+		evHash, err := lf.Decision.Hash()
 		if err != nil {
-			return VerifyResult{}, fmt.Errorf("egress: leaf %d: event hash: %w", seq, err)
+			return VerifyResult{}, fmt.Errorf("egress: leaf %d: decision hash: %w", seq, err)
 		}
 		want, err := leafHash(lf.Seq, lf.PrevHash, evHash)
 		if err != nil {

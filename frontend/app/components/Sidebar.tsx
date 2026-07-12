@@ -72,7 +72,7 @@ export default function Sidebar() {
             gating MCP proxy · self-hosted
           </div>
           <div className="mt-1.5 font-mono text-[11px] text-[var(--faint)]">
-            {log ? `${log.verify.count} crossings · ${log.verify.signed ? "signed" : "rung-1"}` : authed ? "no data yet" : "sign in to see records"}
+            {log ? `${log.verify.count} decisions · ${log.verify.signed ? "signed" : "rung-1"}` : authed ? "no data yet" : "sign in to see records"}
           </div>
         </div>
       </div>

@@ -48,21 +48,32 @@ func recipeLoader() func(string) ([]byte, error) {
 }
 
 type spySink struct {
-	mu sync.Mutex
-	n  int
+	mu   sync.Mutex
+	recs []stag.DecisionRecord
 }
 
-func (s *spySink) Record(_ context.Context, _ stag.ReleaseEvent) error {
+func (s *spySink) Record(_ context.Context, d stag.DecisionRecord) error {
 	s.mu.Lock()
-	s.n++
+	s.recs = append(s.recs, d)
 	s.mu.Unlock()
 	return nil
 }
-func (s *spySink) count() int { s.mu.Lock(); defer s.mu.Unlock(); return s.n }
+
+// count is decisions recorded (allow AND deny); releases is crossings that actually happened.
+func (s *spySink) count() int { s.mu.Lock(); defer s.mu.Unlock(); return len(s.recs) }
+func (s *spySink) releases() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, d := range s.recs {
+		n += len(d.Events)
+	}
+	return n
+}
 
 // TestSessionRecipeBinding is the v2 e2e: two sessions bind the SAME tool to DIFFERENT recipes, and
-// the same call is allowed in one session and denied in the other; an unknown token is refused; and
-// exactly one crossing lands on the ONE shared audit sink.
+// the same call is allowed in one session and denied in the other; an unknown token is refused; and the
+// ONE shared audit sink records BOTH decisions while only the allowed one carries a release.
 func TestSessionRecipeBinding(t *testing.T) {
 	ctx := context.Background()
 
@@ -112,9 +123,13 @@ func TestSessionRecipeBinding(t *testing.T) {
 		t.Fatalf("session B (only_prod) dev: want gate deny (no forward), got %q", out)
 	}
 
-	// exactly one crossing on the shared sink — session A's allow (B never released)
-	if got := sink.count(); got != 1 {
-		t.Errorf("shared audit log: want 1 crossing, got %d", got)
+	// BOTH decisions land on the shared audit log — the blocked attempt is evidence, not noise. But only
+	// session A RELEASED anything: B was denied, so it crossed nothing and carries no release.
+	if got := sink.count(); got != 2 {
+		t.Errorf("shared audit log: want 2 decisions recorded (A's allow + B's deny), got %d", got)
+	}
+	if got := sink.releases(); got != 1 {
+		t.Errorf("only session A released a crossing: want 1, got %d", got)
 	}
 
 	// unknown token -> connect fails (getServer returns nil -> 400)

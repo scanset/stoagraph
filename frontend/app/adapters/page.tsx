@@ -125,6 +125,9 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
   const [authHeader, setAuthHeader] = useState("");
   const [secret, setSecret] = useState("");
   const [secretEnv, setSecretEnv] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [scopes, setScopes] = useState("");
 
   const selectCls = "rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2 py-1.5 text-[12px] text-[var(--text)]";
   // header + query carry a name field; bearer/header/query carry a secret; oauth carries neither
@@ -175,18 +178,43 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
           </>
         )}
         {transport === "http" && isOAuth && (
-          <span className="text-[11px] text-[var(--faint)]">add it, then click <span className="text-[var(--accent)]">Sign in</span> on the row →</span>
+          <>
+            {/* Providers WITHOUT dynamic client registration (GitHub, most big ones) need a client you
+             * registered with them. Leave blank when the provider supports DCR — the gate registers itself. */}
+            <Input placeholder="client_id (blank if provider supports auto-registration)" value={clientId} onChange={(e) => setClientId(e.target.value)} />
+            <input
+              type="password"
+              placeholder="client_secret (if confidential)"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              className="min-w-[9rem] flex-1 rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2.5 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--faint)]"
+            />
+            <Input placeholder="scopes (e.g. repo read:org) — blank = ALL the server advertises" value={scopes} onChange={(e) => setScopes(e.target.value)} />
+            <span className="text-[11px] text-[var(--faint)]">then click <span className="text-[var(--accent)]">Sign in</span> on the row →</span>
+          </>
         )}
         <AddBtn
           disabled={!name || !target || (named && !authHeader) || (needsSecret && !secret && !secretEnv)}
           onClick={() =>
             wrap(async () => {
-              await addMCPServer({ name, transport, target, authScheme, authHeader, secret, secretEnv });
+              // oauth extras ride in oauthConfig (non-secret client id + scopes; secret only if given)
+              let oauthConfig = "";
+              if (isOAuth && (clientId || clientSecret || scopes.trim())) {
+                oauthConfig = JSON.stringify({
+                  client_id: clientId,
+                  client_secret: clientSecret,
+                  scopes: scopes.trim() ? scopes.trim().split(/[\s,]+/) : undefined,
+                });
+              }
+              await addMCPServer({ name, transport, target, authScheme, authHeader, secret, secretEnv, oauthConfig });
               setName("");
               setTarget("");
               setSecret("");
               setSecretEnv("");
               setAuthHeader("");
+              setClientId("");
+              setClientSecret("");
+              setScopes("");
               setAuthScheme("none");
             })
           }

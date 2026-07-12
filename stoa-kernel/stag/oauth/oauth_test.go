@@ -160,6 +160,81 @@ func TestStoreRoundTripAndBearerRefresh(t *testing.T) {
 	}
 }
 
+// TestDiscoverGitHubShape reproduces the real GitHub MCP server: the protected-resource metadata is
+// served ONLY at the RFC 9728 path-scoped URL (/.well-known/oauth-protected-resource/mcp — the bare
+// origin 404s), the 401 challenge names that document, the issuer carries a PATH (/login/oauth) so its
+// RFC 8414 metadata is path-scoped too, and there is NO registration endpoint (no dynamic registration).
+// Every one of those broke the first implementation.
+func TestDiscoverGitHubShape(t *testing.T) {
+	mux := http.NewServeMux()
+	var base string
+
+	// the MCP endpoint itself: 401 + a challenge naming the metadata document
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("WWW-Authenticate",
+			`Bearer error="invalid_request", resource_metadata="`+base+`/.well-known/oauth-protected-resource/mcp"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	// bare protected-resource metadata: NOT served (like GitHub)
+	mux.HandleFunc("/.well-known/oauth-protected-resource", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	// path-scoped protected-resource metadata: the real one
+	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{
+			"resource":              base + "/mcp",
+			"authorization_servers": []string{base + "/login/oauth"}, // issuer WITH a path
+			"scopes_supported":      []string{"repo", "read:org"},
+		})
+	})
+	// issuer-suffixed AS metadata: NOT served (like GitHub)
+	mux.HandleFunc("/login/oauth/.well-known/oauth-authorization-server", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	// path-scoped AS metadata (RFC 8414): the real one — and no registration_endpoint
+	mux.HandleFunc("/.well-known/oauth-authorization-server/login/oauth", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{
+			"issuer":                           base + "/login/oauth",
+			"authorization_endpoint":           base + "/login/oauth/authorize",
+			"token_endpoint":                   base + "/login/oauth/access_token",
+			"code_challenge_methods_supported": []string{"S256"},
+		})
+	})
+
+	srv := httptest.NewServer(mux)
+	base = srv.URL
+	defer srv.Close()
+
+	cfg, err := Discover(context.Background(), srv.Client(), srv.URL+"/mcp")
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if cfg.AuthorizationEndpoint != base+"/login/oauth/authorize" {
+		t.Fatalf("authorization_endpoint not found via path-scoped metadata: %q", cfg.AuthorizationEndpoint)
+	}
+	if cfg.TokenEndpoint != base+"/login/oauth/access_token" {
+		t.Fatalf("token_endpoint wrong: %q", cfg.TokenEndpoint)
+	}
+	if cfg.RegistrationEndpoint != "" {
+		t.Fatalf("expected NO registration endpoint, got %q", cfg.RegistrationEndpoint)
+	}
+	if len(cfg.Scopes) != 2 || cfg.Scopes[0] != "repo" {
+		t.Fatalf("scopes_supported not adopted: %v", cfg.Scopes)
+	}
+	if cfg.Resource != base+"/mcp" {
+		t.Fatalf("resource wrong: %q", cfg.Resource)
+	}
+
+	// No DCR: Register must leave the client empty so the caller can demand a pre-registered client_id.
+	got, rerr := Register(context.Background(), srv.Client(), cfg, "http://localhost:8080"+CallbackPath, "stoagraph")
+	if rerr != nil {
+		t.Fatalf("register should no-op without a registration endpoint, got: %v", rerr)
+	}
+	if got.ClientID != "" {
+		t.Fatalf("expected no client_id without DCR, got %q", got.ClientID)
+	}
+}
+
 func TestBearerUnauthorized(t *testing.T) {
 	st := Store{Dir: t.TempDir()}
 	if _, err := st.Bearer(context.Background(), nil, "never-signed-in"); err == nil {

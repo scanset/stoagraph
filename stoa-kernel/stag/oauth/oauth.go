@@ -146,51 +146,128 @@ func (s Store) Bearer(ctx context.Context, hc *http.Client, server string) (stri
 // kw: oauth discover metadata protected-resource authorization-server well-known
 func Discover(ctx context.Context, hc *http.Client, mcpURL string) (Config, error) {
 	hc = clientOr(hc)
-	origin, err := originOf(mcpURL)
-	if err != nil {
-		return Config{}, err
+	u, err := url.Parse(mcpURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return Config{}, fmt.Errorf("oauth: invalid server URL %q", mcpURL)
 	}
+	origin := u.Scheme + "://" + u.Host
 	cfg := Config{Resource: mcpURL}
 
-	// 1) protected-resource metadata -> the authorization server issuer(s)
-	issuer := origin
+	// 1) protected-resource metadata -> the authorization server issuer(s).
+	//
+	// RFC 9728 inserts the well-known segment BEFORE the resource path, so a resource at /mcp is
+	// described at /.well-known/oauth-protected-resource/mcp — NOT at the bare origin. GitHub serves
+	// only the path-scoped form (the bare one 404s). Best of all, the server's own 401 carries a
+	// `WWW-Authenticate: ... resource_metadata="<url>"` hint naming the exact document, so ask it first.
 	var prm struct {
 		AuthorizationServers []string `json:"authorization_servers"`
 		Resource             string   `json:"resource"`
+		ScopesSupported      []string `json:"scopes_supported"`
 	}
-	if getJSON(ctx, hc, origin+"/.well-known/oauth-protected-resource", &prm) == nil {
-		if prm.Resource != "" {
-			cfg.Resource = prm.Resource
+	for _, cand := range prmCandidates(ctx, hc, mcpURL, origin, u.Path) {
+		if getJSON(ctx, hc, cand, &prm) == nil && len(prm.AuthorizationServers) > 0 {
+			break
 		}
-		if len(prm.AuthorizationServers) > 0 {
-			issuer = strings.TrimRight(prm.AuthorizationServers[0], "/")
+	}
+	issuer := origin
+	if prm.Resource != "" {
+		cfg.Resource = prm.Resource
+	}
+	if len(prm.AuthorizationServers) > 0 {
+		issuer = strings.TrimRight(prm.AuthorizationServers[0], "/")
+	}
+	// Default the requested scopes to what the resource says it supports; without a scope the token a
+	// provider mints can be useless. The operator can narrow this in the server's oauth config.
+	if len(prm.ScopesSupported) > 0 {
+		cfg.Scopes = prm.ScopesSupported
+	}
+
+	// 2) authorization-server metadata. RFC 8414 path-scopes too: an issuer WITH a path
+	// (https://github.com/login/oauth) is described at
+	// https://github.com/.well-known/oauth-authorization-server/login/oauth.
+	for _, cand := range asCandidates(issuer) {
+		var asm struct {
+			Issuer                string `json:"issuer"`
+			AuthorizationEndpoint string `json:"authorization_endpoint"`
+			TokenEndpoint         string `json:"token_endpoint"`
+			RegistrationEndpoint  string `json:"registration_endpoint"`
+		}
+		if getJSON(ctx, hc, cand, &asm) == nil && asm.TokenEndpoint != "" {
+			cfg.Issuer = firstNonEmpty(asm.Issuer, issuer)
+			cfg.AuthorizationEndpoint = asm.AuthorizationEndpoint
+			cfg.TokenEndpoint = asm.TokenEndpoint
+			cfg.RegistrationEndpoint = asm.RegistrationEndpoint
+			return cfg, nil
 		}
 	}
 
-	// 2) authorization-server metadata (RFC 8414, then OIDC discovery) at the issuer
-	var asm struct {
-		Issuer                string `json:"issuer"`
-		AuthorizationEndpoint string `json:"authorization_endpoint"`
-		TokenEndpoint         string `json:"token_endpoint"`
-		RegistrationEndpoint  string `json:"registration_endpoint"`
-	}
-	ok := getJSON(ctx, hc, issuer+"/.well-known/oauth-authorization-server", &asm) == nil && asm.TokenEndpoint != ""
-	if !ok {
-		ok = getJSON(ctx, hc, issuer+"/.well-known/openid-configuration", &asm) == nil && asm.TokenEndpoint != ""
-	}
-	if ok {
-		cfg.Issuer = firstNonEmpty(asm.Issuer, issuer)
-		cfg.AuthorizationEndpoint = asm.AuthorizationEndpoint
-		cfg.TokenEndpoint = asm.TokenEndpoint
-		cfg.RegistrationEndpoint = asm.RegistrationEndpoint
-		return cfg, nil
-	}
-
-	// 3) last-resort conventional endpoints on the issuer origin
+	// 3) last-resort conventional endpoints on the issuer
 	cfg.Issuer = issuer
 	cfg.AuthorizationEndpoint = issuer + "/authorize"
 	cfg.TokenEndpoint = issuer + "/token"
 	return cfg, nil
+}
+
+// prmCandidates lists protected-resource-metadata URLs to try, best first: the one the server itself
+// names in its 401 challenge, then the RFC 9728 path-scoped form, then the bare origin.
+func prmCandidates(ctx context.Context, hc *http.Client, mcpURL, origin, path string) []string {
+	var out []string
+	if hint := challengeMetadataURL(ctx, hc, mcpURL); hint != "" {
+		out = append(out, hint)
+	}
+	if p := strings.Trim(path, "/"); p != "" {
+		out = append(out, origin+"/.well-known/oauth-protected-resource/"+p)
+	}
+	return append(out, origin+"/.well-known/oauth-protected-resource")
+}
+
+// asCandidates lists authorization-server-metadata URLs for an issuer that may carry a path.
+func asCandidates(issuer string) []string {
+	var out []string
+	if u, err := url.Parse(issuer); err == nil && u.Host != "" {
+		if p := strings.Trim(u.Path, "/"); p != "" {
+			iOrigin := u.Scheme + "://" + u.Host
+			out = append(out,
+				iOrigin+"/.well-known/oauth-authorization-server/"+p,
+				iOrigin+"/.well-known/openid-configuration/"+p,
+			)
+		}
+	}
+	return append(out,
+		issuer+"/.well-known/oauth-authorization-server",
+		issuer+"/.well-known/openid-configuration",
+	)
+}
+
+// challengeMetadataURL reads the resource_metadata="..." hint from the server's 401 WWW-Authenticate
+// challenge — the spec's most reliable pointer to its metadata document. Empty when absent.
+func challengeMetadataURL(ctx context.Context, hc *http.Client, mcpURL string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mcpURL, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	for _, h := range resp.Header.Values("WWW-Authenticate") {
+		const key = `resource_metadata=`
+		i := strings.Index(h, key)
+		if i < 0 {
+			continue
+		}
+		v := strings.TrimSpace(h[i+len(key):])
+		v = strings.TrimPrefix(v, `"`)
+		if j := strings.IndexAny(v, `",`); j >= 0 {
+			v = v[:j]
+		}
+		if strings.HasPrefix(v, "http") {
+			return strings.TrimRight(v, "/")
+		}
+	}
+	return ""
 }
 
 // Register performs RFC 7591 dynamic client registration when the AS advertises an endpoint, yielding a
@@ -339,14 +416,6 @@ func clientOr(hc *http.Client) *http.Client {
 		return hc
 	}
 	return &http.Client{Timeout: 20 * time.Second}
-}
-
-func originOf(raw string) (string, error) {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("oauth: invalid server URL %q", raw)
-	}
-	return u.Scheme + "://" + u.Host, nil
 }
 
 func getJSON(ctx context.Context, hc *http.Client, u string, out any) error {

@@ -48,6 +48,50 @@ many `Planning/` docs) predate this and use "StoaGraph" to mean the gate — rea
 
 ## Entries
 
+## 2026-07-12 — Planning/33 ratified: context provider kinds (static, skill, signature tier)
+**Phase:** orchestration (READ channel).
+**Status:** PLAN — the /30 READ channel's kind taxonomy is ratified; `http` remains the only built kind.
+**Current step:** none in flight; C1 (`static` kind) staged next, sequenced with /32's I-ladder by Curtis.
+**Done since last entry:**
+- Wrote [Planning/33](planning/33-context-provider-kinds.md): kind taxonomy ratified — `static`
+  (content-addressed bundle, hash-at-registration, no outbound query), `skill` (a `static`
+  procedure bundle selected by name with a **signature tier**: ed25519-signed → instruction slot,
+  verified by the harness against the operator key, never a channel flag; unsigned → Input),
+  `mcp_resource` (downstream resource proxy on the /28 transport; subscriptions converge with /32
+  ingress), and **`rag` buried as doctrine — the gate never embeds** (kbserve behind `http` is the
+  reference retrieval pattern).
+- Hardening ratified for all kinds: hash-chain `reads.jsonl` + per-item content hashes (READ
+  crossings are evidence), and per-binding outbound-query bounds (`verbatim|bounded|none`,
+  default bounded) — the READ-side exfiltration channel named and bounded.
+- Build ladder C1–C5 (C5 = console provider health: read-fail-open must be visible, not silent).
+**Staged for this step:** the C1–C5 ladder in Planning/33.
+**Next action:** build C1 — the `static` kind (register + hash + serve + size cap), pass bar: a
+markdown directory serves through the gate with no kbserve and the read record carries the bundle hash.
+**Open decisions:** skill signing key (dedicated, leaning) vs reuse checkpoint keypair; skill
+version surface (manifest field vs hash-only); `static` refresh (manual re-register, leaning);
+bounded-query defaults (256 chars, conservative charset proposed).
+
+## 2026-07-12 — Planning/32 ratified: the event-ingress build plan
+**Phase:** orchestration (event ingress).
+**Status:** PLAN — Planning/13's deferred listener is un-deferred; design ratified, nothing built.
+**Current step:** none in flight; I1 (envelope + ingress log, observe mode) is staged next.
+**Done since last entry:**
+- Wrote [Planning/32](planning/32-event-ingress-build.md): per-source adapters
+  (generic/sentinel/alertmanager/user) normalizing to one canonical envelope; the governing rule
+  **attribution upgrades routing, never content** (a verified channel earns the envelope routing
+  rights; payload is untrusted Input, always); two-lane dispatch — attributed events dispatch
+  directly, unattributed events may only trigger a **validation workflow** (authenticated
+  read-backs through the gate's own downstreams; the verified fact re-dispatches as a synthetic
+  attributed event); the hash-chained ingress log (every arrival recorded, drops included);
+  deterministic cost bounds ahead of the validation lane; build ladder I1–I6.
+- Indexed planning docs 21–32 in [planning/README.md](planning/README.md) (the list had stopped at 20).
+**Staged for this step:** the I1–I6 ladder in Planning/32.
+**Next action:** build I1 — envelope type + ingress log in observe mode (receive, normalize,
+record, dispatch nothing).
+**Open decisions:** HMAC scheme per source; broker for I5 (NATS leaning); where the lane-2 budget
+cap lives (adapter vs dispatcher); synthetic-event provenance naming (`validated:<recipe>` vs
+`verified:<source>`).
+
 ## 2026-07-11 — v0.1 blockers cleared: license, a working quickstart, CI
 **Phase:** release. **Status:** DONE + verified from a wiped tree (no volumes, no data). Ready to tag.
 **The three things that actually blocked a tag** (the core was already strong; these were not):

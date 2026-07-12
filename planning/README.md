@@ -116,6 +116,35 @@ bring your own gate.
   (Curtis + Gemini): the dual-proxy operational model (LangChain sync → MCP gate out; webhooks/events async →
   taint-at-ingest in), the non-bypassable-boundary truth, and two console-UX ideas — the **Taint Map**
   (data-flow trust audit; the DENY "gotcha") and the **Reactor** (async event → propose → dispose).
+- [21-model-providers.md](21-model-providers.md) — connecting Claude and OpenRouter: the proposer
+  boundary as the intelligence source.
+- [22-deployment-topology.md](22-deployment-topology.md) — stag is the gate, the harness is the
+  orchestrator; the split as deployed.
+- [23-orchestration-roadmap.md](23-orchestration-roadmap.md) — what the pivot defers, and why
+  mediation comes first.
+- [24-stag-proxy-design.md](24-stag-proxy-design.md) — the standing gating MCP server: the daemon
+  an agent connects to.
+- [25-event-dispatch-and-session-model.md](25-event-dispatch-and-session-model.md) — event dispatch,
+  the event map, and the session model.
+- [26-oss-release-readiness.md](26-oss-release-readiness.md) — open-source release readiness for
+  ALL of StoaGraph (the unified, no-carve-out plan).
+- [27-mcp-gate-nail-down.md](27-mcp-gate-nail-down.md) — nailing down the MCP gate for v1 (spec).
+- [28-downstream-mcp-auth.md](28-downstream-mcp-auth.md) — downstream MCP server authentication (spec).
+- [29-k8s-context-and-toolset.md](29-k8s-context-and-toolset.md) — the k8s real use case:
+  multi-tool sessions + the KB context provider (spec).
+- [30-gated-context-resources.md](30-gated-context-resources.md) — context behind the gate:
+  context providers as gated MCP resources (spec).
+- [31-control-plane-auth.md](31-control-plane-auth.md) — control-plane auth: the role tokens
+  (console / dispatch / approve) and why the orchestrator can never approve (spec).
+- [32-event-ingress-build.md](32-event-ingress-build.md) — the event-ingress build plan:
+  per-source adapters and the canonical envelope, the attribution-upgrades-routing-never-content
+  rule, two-lane dispatch (direct vs the validation workflow for unattributed events), the
+  ingress log, cost bounds on the validation lane, and the I1–I6 build ladder.
+- [33-context-provider-kinds.md](33-context-provider-kinds.md) — the READ-channel kind taxonomy:
+  `static` (content-addressed bundles), `skill` (a procedure with a **signature tier** — signed →
+  instruction slot, unsigned → Input), `mcp_resource` (downstream resource proxy; subscriptions
+  converge with /32 ingress), `rag` buried as doctrine (the gate never embeds), read-log
+  chaining, outbound-query bounds, and the C1–C5 build ladder.
 
 ## Reuse map (patterns, not runtime dependencies)
 

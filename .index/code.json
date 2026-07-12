@@ -871,7 +871,8 @@
             "chained",
             "leaf",
             "fail-closed",
-            "no-advance-on-error"
+            "no-advance-on-error",
+            "one-leaf-per-decision"
           ],
           "line": 73,
           "name": "Record"
@@ -902,7 +903,7 @@
             "canonical",
             "seq",
             "prev",
-            "event-hash"
+            "decision-hash"
           ],
           "line": 128,
           "name": "leafHash"
@@ -1283,6 +1284,39 @@
     {
       "doc": "",
       "keywords": [
+        "decision",
+        "record",
+        "audit",
+        "unit",
+        "tool",
+        "verdict",
+        "forwarded",
+        "value",
+        "recipe",
+        "fault",
+        "releases"
+      ],
+      "layer": "gate",
+      "package": "record",
+      "path": "stoa-kernel/stag/internal/record/decision.go",
+      "symbols": [
+        {
+          "kw": [
+            "decision",
+            "canonical",
+            "hash",
+            "tamper-evident",
+            "leaf",
+            "payload"
+          ],
+          "line": 29,
+          "name": "Hash"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
         "release",
         "event",
         "trust",
@@ -1575,7 +1609,7 @@
             "dynamic",
             "client"
           ],
-          "line": 201,
+          "line": 278,
           "name": "Register"
         },
         {
@@ -1586,7 +1620,7 @@
             "challenge",
             "s256"
           ],
-          "line": 232,
+          "line": 309,
           "name": "PKCE"
         },
         {
@@ -1598,7 +1632,7 @@
             "pkce",
             "resource"
           ],
-          "line": 245,
+          "line": 322,
           "name": "AuthCodeURL"
         },
         {
@@ -1608,7 +1642,7 @@
             "authorization-code",
             "token"
           ],
-          "line": 268,
+          "line": 345,
           "name": "Exchange"
         },
         {
@@ -1618,7 +1652,7 @@
             "token",
             "grant"
           ],
-          "line": 283,
+          "line": 360,
           "name": "Refresh"
         }
       ]
@@ -2649,6 +2683,23 @@
         },
         {
           "kw": [
+            "record",
+            "view",
+            "audit",
+            "leaf",
+            "tool",
+            "verdict",
+            "forwarded",
+            "value",
+            "recipe",
+            "fault",
+            "releases"
+          ],
+          "line": 125,
+          "name": "RecordView"
+        },
+        {
+          "kw": [
             "verify",
             "view",
             "count",
@@ -2658,17 +2709,18 @@
             "verified",
             "error"
           ],
-          "line": 121,
+          "line": 136,
           "name": "VerifyView"
         },
         {
           "kw": [
             "log",
             "view",
-            "events",
-            "verify"
+            "decisions",
+            "verify",
+            "audit-chain"
           ],
-          "line": 131,
+          "line": 146,
           "name": "LogView"
         },
         {
@@ -2683,7 +2735,7 @@
             "health",
             "cors"
           ],
-          "line": 137,
+          "line": 152,
           "name": "Handler"
         },
         {
@@ -2693,7 +2745,7 @@
             "dev",
             "preflight"
           ],
-          "line": 195,
+          "line": 210,
           "name": "cors"
         },
         {
@@ -2704,7 +2756,7 @@
             "view",
             "fail-closed"
           ],
-          "line": 210,
+          "line": 225,
           "name": "handleDecide"
         },
         {
@@ -2717,7 +2769,7 @@
             "chain",
             "events"
           ],
-          "line": 229,
+          "line": 244,
           "name": "view"
         },
         {
@@ -2728,21 +2780,25 @@
             "signed",
             "events"
           ],
-          "line": 259,
+          "line": 274,
           "name": "handleLog"
         },
         {
           "kw": [
             "read",
-            "events",
+            "records",
             "parse",
             "leaves",
             "to",
-            "event",
-            "views"
+            "audit",
+            "views",
+            "allow",
+            "deny",
+            "escalate",
+            "releases"
           ],
-          "line": 298,
-          "name": "readEvents"
+          "line": 313,
+          "name": "readRecords"
         }
       ]
     },
@@ -2779,7 +2835,7 @@
             "enum",
             "register"
           ],
-          "line": 50,
+          "line": 53,
           "name": "CanonicalHash"
         },
         {
@@ -2789,7 +2845,7 @@
             "re-export",
             "fail-closed"
           ],
-          "line": 53,
+          "line": 56,
           "name": "ParseTrustClass"
         },
         {
@@ -2801,7 +2857,7 @@
             "class",
             "origin"
           ],
-          "line": 58,
+          "line": 61,
           "name": "Slot"
         },
         {
@@ -2814,7 +2870,7 @@
             "branch",
             "gate"
           ],
-          "line": 65,
+          "line": 68,
           "name": "NodeKind"
         },
         {
@@ -2825,7 +2881,7 @@
             "canonical",
             "register"
           ],
-          "line": 82,
+          "line": 85,
           "name": "String"
         },
         {
@@ -2838,7 +2894,7 @@
             "of",
             "string"
           ],
-          "line": 102,
+          "line": 105,
           "name": "ParseNodeKind"
         },
         {
@@ -2850,7 +2906,7 @@
             "forward",
             "edge"
           ],
-          "line": 122,
+          "line": 125,
           "name": "Case"
         },
         {
@@ -2864,7 +2920,7 @@
             "forward-only",
             "edges"
           ],
-          "line": 128,
+          "line": 131,
           "name": "Step"
         },
         {
@@ -2873,7 +2929,7 @@
             "ingredients",
             "steps"
           ],
-          "line": 146,
+          "line": 149,
           "name": "Recipe"
         },
         {
@@ -2884,7 +2940,7 @@
             "per",
             "sink"
           ],
-          "line": 152,
+          "line": 155,
           "name": "SinkOutcome"
         },
         {
@@ -2896,7 +2952,7 @@
             "fail",
             "escalate"
           ],
-          "line": 161,
+          "line": 164,
           "name": "GateOutcome"
         },
         {
@@ -2909,7 +2965,7 @@
             "events",
             "fault"
           ],
-          "line": 169,
+          "line": 172,
           "name": "EvalResult"
         },
         {
@@ -2925,7 +2981,7 @@
             "foreach",
             "single-arg"
           ],
-          "line": 178,
+          "line": 181,
           "name": "Eval"
         },
         {
@@ -2936,7 +2992,7 @@
             "inputs",
             "propose-by-name"
           ],
-          "line": 187,
+          "line": 190,
           "name": "EvalArgs"
         }
       ]

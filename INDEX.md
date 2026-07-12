@@ -30,10 +30,10 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 - `NewJSONLSink` (:53) — new · jsonl · sink · fresh · genesis
 - `ResumeJSONLSink` (:58) — resume · jsonl · sink · continue · existing · chain · head · seq
 - `Record` (:70) — discard · sink · record · nothing · simulator · no · audit
-- `Record` (:73) — record · append · chained · leaf · fail-closed · no-advance-on-error
+- `Record` (:73) — record · append · chained · leaf · fail-closed · no-advance-on-error · one-leaf-per-decision
 - `Head` (:114) — head · last · leaf · hash
 - `Count` (:121) — count · leaves · written
-- `leafHash` (:128) — leaf · hash · canonical · seq · prev · event-hash
+- `leafHash` (:128) — leaf · hash · canonical · seq · prev · decision-hash
 - `Verify` (:137) — verify · chain · integrity · head · count · tamper-evident · recompute
 
 ### `stoa-kernel/stag/egress/sign.go`
@@ -82,6 +82,12 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 - `CanonicalJSON` (:12) — canonical · json · sorted · keys
 - `CanonicalHash` (:17) — canonical · hash · sha256 · hex
 
+### `stoa-kernel/stag/internal/record/decision.go`
+
+**kw:** decision · record · audit · unit · tool · verdict · forwarded · value · recipe · fault · releases
+
+- `Hash` (:29) — decision · canonical · hash · tamper-evident · leaf · payload
+
 ### `stoa-kernel/stag/internal/record/releaseevent.go`
 
 **kw:** release · event · trust · crossing · record · hashed · attestation · four · dimensions · tamper-evident
@@ -125,11 +131,11 @@ Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE 
 - `Store` (:75) — oauth · store · dir · load · save · file
 - `Bearer` (:112) — oauth · bearer · resolve · refresh · connect
 - `Discover` (:147) — oauth · discover · metadata · protected-resource · authorization-server · well-known
-- `Register` (:201) — oauth · register · dcr · dynamic · client
-- `PKCE` (:232) — oauth · pkce · verifier · challenge · s256
-- `AuthCodeURL` (:245) — oauth · auth-code · url · authorize · pkce · resource
-- `Exchange` (:268) — oauth · exchange · authorization-code · token
-- `Refresh` (:283) — oauth · refresh · token · grant
+- `Register` (:278) — oauth · register · dcr · dynamic · client
+- `PKCE` (:309) — oauth · pkce · verifier · challenge · s256
+- `AuthCodeURL` (:322) — oauth · auth-code · url · authorize · pkce · resource
+- `Exchange` (:345) — oauth · exchange · authorization-code · token
+- `Refresh` (:360) — oauth · refresh · token · grant
 
 ### `stoa-kernel/stag/provider/provider.go`
 Package provider is the READ channel of the dual proxy (Planning/17/18): context providers behind one interface, with the load-bearing guarantee that ALL context is stamped untrusted at origin, unbypassably. A provider y
@@ -267,34 +273,35 @@ Package serve is the HTTP operator surface over the gating proxy (Planning/16): 
 - `ChainView` (:90) — chain · view · sense · reason · decide · act · prove
 - `EventView` (:99) — event · view · field · rule · actor · subject
 - `DecisionView` (:107) — decision · view · verdict · forward · value · rule · chain · events
-- `VerifyView` (:121) — verify · view · count · head · signed · keyid · verified · error
-- `LogView` (:131) — log · view · events · verify
-- `Handler` (:137) — handler · mux · routes · api · decide · log · policies · health · cors
-- `cors` (:195) — cors · permissive · dev · preflight
-- `handleDecide` (:210) — decide · decode · gate · view · fail-closed
-- `view` (:229) — view · decision · to · legible · view · chain · events
-- `handleLog` (:259) — log · read · verify · signed · events
-- `readEvents` (:298) — read · events · parse · leaves · to · event · views
+- `RecordView` (:125) — record · view · audit · leaf · tool · verdict · forwarded · value · recipe · fault · releases
+- `VerifyView` (:136) — verify · view · count · head · signed · keyid · verified · error
+- `LogView` (:146) — log · view · decisions · verify · audit-chain
+- `Handler` (:152) — handler · mux · routes · api · decide · log · policies · health · cors
+- `cors` (:210) — cors · permissive · dev · preflight
+- `handleDecide` (:225) — decide · decode · gate · view · fail-closed
+- `view` (:244) — view · decision · to · legible · view · chain · events
+- `handleLog` (:274) — log · read · verify · signed · events
+- `readRecords` (:313) — read · records · parse · leaves · to · audit · views · allow · deny · escalate · releases
 
 ### `stoa-kernel/stag/stag.go`
 Package stag is the public entry point to the StAG kernel: Eval, the recipe evaluator that composes the internal trust/gate/release/record primitives into the product's load-bearing guarantee (no non-authoritative value 
 
 **kw:** stag · public · api · recipe · eval · compose · kernel · invariant · facade · re-export · graph · walk · branch · gate
 
-- `CanonicalHash` (:50) — facade · re-exports · one · hashing · discipline · one · enum · register
-- `ParseTrustClass` (:53) — parse · inverses · re-export · fail-closed
-- `Slot` (:58) — bind · graph · slot · value · class · origin
-- `NodeKind` (:65) — recipe · node · kind · propose · sink · branch · gate
-- `String` (:82) — node · kind · string · canonical · register
-- `ParseNodeKind` (:102) — parse · node · kind · fail-closed · inverse · of · string
-- `Case` (:122) — branch · case · closed · predicate · forward · edge
-- `Step` (:128) — recipe · step · propose · sink · branch · gate · forward-only · edges
-- `Recipe` (:146) — recipe · ingredients · steps
-- `SinkOutcome` (:152) — sink · outcome · verdict · per · sink
-- `GateOutcome` (:161) — gate · outcome · checkpoint · pass · fail · escalate
-- `EvalResult` (:169) — eval · result · verdict · sinks · gates · events · fault
-- `Eval` (:178) — eval · recipe · path · walk · forward-only · compose · kernel · invariant · foreach · single-arg
-- `EvalArgs` (:187) — eval · multi-arg · named · inputs · propose-by-name
+- `CanonicalHash` (:53) — facade · re-exports · one · hashing · discipline · one · enum · register
+- `ParseTrustClass` (:56) — parse · inverses · re-export · fail-closed
+- `Slot` (:61) — bind · graph · slot · value · class · origin
+- `NodeKind` (:68) — recipe · node · kind · propose · sink · branch · gate
+- `String` (:85) — node · kind · string · canonical · register
+- `ParseNodeKind` (:105) — parse · node · kind · fail-closed · inverse · of · string
+- `Case` (:125) — branch · case · closed · predicate · forward · edge
+- `Step` (:131) — recipe · step · propose · sink · branch · gate · forward-only · edges
+- `Recipe` (:149) — recipe · ingredients · steps
+- `SinkOutcome` (:155) — sink · outcome · verdict · per · sink
+- `GateOutcome` (:164) — gate · outcome · checkpoint · pass · fail · escalate
+- `EvalResult` (:172) — eval · result · verdict · sinks · gates · events · fault
+- `Eval` (:181) — eval · recipe · path · walk · forward-only · compose · kernel · invariant · foreach · single-arg
+- `EvalArgs` (:190) — eval · multi-arg · named · inputs · propose-by-name
 
 ### `stoa-kernel/stag/store/approval.go`
 

@@ -32,15 +32,67 @@ type ReadChannel struct {
 // boundary, inv 10), AND serves each bound context provider as a resource template (the READ channel —
 // label+record). A denied/escalated call returns a tool error and NEVER reaches downstream; a read is
 // always answered but stamped untrusted at origin.
+//
+// It advertises ONLY the tools the gate has a route for. An unrouted tool is already denied at Decide
+// (fail closed), so hiding it grants nothing — but it makes the agent's visible world exactly equal to
+// what policy permits. A downstream with 44 tools and one route offers the model ONE tool: it cannot
+// burn turns on calls that were always going to be refused, and a prompt-injected document cannot name
+// a capability the model has no way to know exists. Advertising is visibility; Decide is still the
+// enforcement, and it re-checks every call.
 func NewGatingServer(gate proxy.Gate, downstream *mcp.ClientSession, tools []*mcp.Tool, read ReadChannel) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "stag", Version: "0.1"}, nil)
+	s.AddReceivingMiddleware(recordUnrouted(gate))
 	for _, t := range tools {
+		if _, routed := gate.Routes[t.Name]; !routed {
+			continue // no policy governs it => the agent is never even offered it
+		}
 		s.AddTool(t, gatingHandler(gate, downstream))
 	}
 	for _, p := range read.Providers {
 		s.AddResourceTemplate(contextTemplate(p.Name()), contextHandler(p, read.Record))
 	}
 	return s
+}
+
+// recordUnrouted catches a tools/call naming a tool the gate does not route.
+//
+// Hiding unrouted tools (above) means the SDK would otherwise reject such a name as "unknown tool"
+// BEFORE any gate code runs — and the attempt would leave no trace. But an agent naming a tool it was
+// never offered is the loudest signal in the system: a well-behaved model calls only what it was given,
+// so this is either a prompt injection or a jailbreak reaching for something it should not know about.
+// It must be RECORDED, not silently 404'd. This middleware routes those calls through Gate.Decide, which
+// fail-closes (deny, no forward) and writes the audit leaf, then returns the same refusal the agent
+// would see for any other denial.
+func recordUnrouted(gate proxy.Gate) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			ctr, ok := req.(*mcp.CallToolRequest)
+			if method != "tools/call" || !ok {
+				return next(ctx, method, req)
+			}
+			if _, routed := gate.Routes[ctr.Params.Name]; routed {
+				return next(ctx, method, req) // governed: the tool's own gating handler decides
+			}
+			dec := gate.Decide(ctx, proxy.ToolCall{Tool: ctr.Params.Name, Args: decodeArgs(ctr.Params.Arguments)})
+			return refusal(dec), nil
+		}
+	}
+}
+
+// refusal is the tool-level error an agent sees for a call the gate did not forward. Structured gate
+// metadata rides in the protocol-reserved _meta so an orchestrator can act on it without parsing prose.
+func refusal(dec proxy.Decision) *mcp.CallToolResult {
+	meta := map[string]any{"verdict": dec.Verdict.String(), "tool": dec.Tool}
+	if dec.ApprovalID != "" {
+		meta["approvalId"] = dec.ApprovalID
+	}
+	return &mcp.CallToolResult{
+		Meta:    mcp.Meta{"stag": meta},
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{
+			Text: fmt.Sprintf("stag gate: %s — %q not forwarded", dec.Verdict, dec.Tool),
+		}},
+	}
 }
 
 // contextURIScheme is the READ-channel namespace: each provider is one resource template
@@ -120,20 +172,7 @@ func gatingHandler(gate proxy.Gate, downstream *mcp.ClientSession) mcp.ToolHandl
 		dec := gate.Decide(ctx, call)
 		if !dec.Forward {
 			// a tool-level error the agent sees; the downstream server is never called.
-			// Structured gate metadata rides in the protocol-reserved _meta so an orchestrator
-			// can act on it (e.g. await a human approval on escalate) WITHOUT the model having to
-			// parse the human text. `approvalId` is set only for an approval-gated escalation.
-			meta := map[string]any{"verdict": dec.Verdict.String(), "tool": dec.Tool}
-			if dec.ApprovalID != "" {
-				meta["approvalId"] = dec.ApprovalID
-			}
-			return &mcp.CallToolResult{
-				Meta:    mcp.Meta{"stag": meta},
-				IsError: true,
-				Content: []mcp.Content{&mcp.TextContent{
-					Text: fmt.Sprintf("stag gate: %s — %q not forwarded", dec.Verdict, dec.Tool),
-				}},
-			}, nil
+			return refusal(dec), nil
 		}
 		// cleared: forward the ORIGINAL raw arguments downstream to preserve fidelity, minus the
 		// gate-only approval_token meta arg (Stage 5) — it authorizes the release, it is not a

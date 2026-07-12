@@ -20,7 +20,7 @@ func fixedKey(t testing.TB, b byte) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 // logOf records events to a buffer and returns the bytes plus a Checkpoint over
 // the head. ctx-free: the sink ignores ctx.
-func logOf(t testing.TB, origin string, events ...stag.ReleaseEvent) ([]byte, egress.Checkpoint) {
+func logOf(t testing.TB, origin string, events ...stag.DecisionRecord) ([]byte, egress.Checkpoint) {
 	t.Helper()
 	var buf bytes.Buffer
 	s := egress.NewJSONLSink(&buf)

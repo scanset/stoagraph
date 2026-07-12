@@ -236,7 +236,7 @@ function Stats({ decisions, log }: { decisions: Decision[]; log: LogView | null 
       <Stat label="Allowed" value={total ? `${pct}%` : "—"} tone="var(--allow)" hint={`${allowed} forwarded`} />
       <Stat label="Denied / escalated" value={String(blocked)} tone="var(--deny)" hint="never forwarded" />
       <Stat
-        label="Signed crossings"
+        label="Recorded decisions"
         value={log ? String(log.verify.count) : "—"}
         hint={log?.verify.signed ? "checkpoint signed" : "hash-chained"}
       />
@@ -409,7 +409,7 @@ function Detail({
             </span>
           )}
         </div>
-        <Row k="Audit log" v={log ? `${log.verify.count} crossings` : "…"} />
+        <Row k="Audit log" v={log ? `${log.verify.count} decisions` : "…"} />
         <Row k="Head" v={log?.verify.head ? `sha256:${log.verify.head.slice(0, 12)}…` : "—"} mono />
         {log?.verify.signed && <Row k="Signed by" v={log.verify.keyId || "—"} mono />}
         <div className="mt-4 flex gap-2.5">

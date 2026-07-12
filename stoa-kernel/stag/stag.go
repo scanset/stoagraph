@@ -26,6 +26,9 @@ type (
 	RuleKind        = release.RuleKind
 	ReleaseRule     = release.ReleaseRule
 	ReleaseEvent    = record.ReleaseEvent
+	// DecisionRecord is the audit chain's unit: one leaf per DECISION (allow, deny or escalate),
+	// carrying its releases only when the call was actually forwarded.
+	DecisionRecord = record.DecisionRecord
 )
 
 // Re-exported constants, so a caller can build recipes without the internals.

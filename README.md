@@ -125,6 +125,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 
 - [SECURITY.md](SECURITY.md) — the threat model. **Read the non-goals as carefully as the guarantees.**
 - [docs/recipe-authoring.md](docs/recipe-authoring.md) — the policy language.
+- [docs/routes.md](docs/routes.md) — binding a tool to a policy: why an unrouted tool is denied, and which arguments a route must gate.
 - [docs/mcp-gating-proxy.md](docs/mcp-gating-proxy.md) — how the gate speaks MCP.
 - [docs/docker.md](docs/docker.md) — containers, and why the secrets are split across them.
 - [examples/custom-tool/](examples/custom-tool/) — bring your own tool in ~5 minutes.

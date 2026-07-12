@@ -42,7 +42,19 @@ export type VerifyView = {
   error?: string;
 };
 
-export type LogView = { events: EventView[]; verify: VerifyView };
+// One leaf of the audit chain: a decision the gate made. EVERY decision is recorded — allow, deny and
+// escalate alike — because a blocked attempt is the evidence the control worked. `releases` are the
+// crossings that ACTUALLY happened, so they appear only when `forwarded` is true.
+export type RecordView = {
+  tool: string;
+  verdict: string; // allow | deny | escalate
+  forwarded: boolean;
+  value: string;
+  recipe?: string;
+  fault?: string;
+  releases?: EventView[];
+};
+export type LogView = { records: RecordView[]; verify: VerifyView };
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
 

@@ -13,15 +13,25 @@ import (
 	"github.com/scanset/stoagraph/stoa-kernel/stag/egress"
 )
 
-func ev(i int, field string) stag.ReleaseEvent {
-	return stag.ReleaseEvent{
-		SubjectOrigin:   "propose",
-		CollectedField:  "action",
-		TargetField:     field,
-		AuthorizingRule: fmt.Sprintf("rule.%d", i),
-		Actor:           "policy:incident",
-		Ordering:        int64(i),
-		RecipeHash:      "f88a9c15",
+// ev builds one audit leaf: an ALLOWED decision carrying the crossing it released. (The chain's unit is
+// the decision; a release rides inside it, and only ever on a forwarded call.)
+func ev(i int, field string) stag.DecisionRecord {
+	return stag.DecisionRecord{
+		Tool:       "write_note",
+		Verdict:    "allow",
+		Forwarded:  true,
+		Value:      field,
+		Recipe:     "write_note_policy",
+		RecipeHash: "f88a9c15",
+		Events: []stag.ReleaseEvent{{
+			SubjectOrigin:   "propose",
+			CollectedField:  "action",
+			TargetField:     field,
+			AuthorizingRule: fmt.Sprintf("rule.%d", i),
+			Actor:           "policy:incident",
+			Ordering:        int64(i),
+			RecipeHash:      "f88a9c15",
+		}},
 	}
 }
 
@@ -54,7 +64,7 @@ func TestRecordAndVerify(t *testing.T) {
 	ctx := context.Background()
 	var buf bytes.Buffer
 	s := egress.NewJSONLSink(&buf)
-	events := []stag.ReleaseEvent{ev(0, "a"), ev(1, "b"), ev(2, "c")}
+	events := []stag.DecisionRecord{ev(0, "a"), ev(1, "b"), ev(2, "c")}
 	for _, e := range events {
 		if err := s.Record(ctx, e); err != nil {
 			t.Fatal(err)
@@ -98,7 +108,7 @@ func TestVerifyRejectsTamper(t *testing.T) {
 	honest := func() []byte {
 		var buf bytes.Buffer
 		s := egress.NewJSONLSink(&buf)
-		for _, e := range []stag.ReleaseEvent{ev(0, "a"), ev(1, "b"), ev(2, "c")} {
+		for _, e := range []stag.DecisionRecord{ev(0, "a"), ev(1, "b"), ev(2, "c")} {
 			if err := s.Record(ctx, e); err != nil {
 				t.Fatal(err)
 			}
@@ -195,7 +205,7 @@ func TestResume(t *testing.T) {
 	ctx := context.Background()
 	var a bytes.Buffer
 	sa := egress.NewJSONLSink(&a)
-	for _, e := range []stag.ReleaseEvent{ev(0, "a"), ev(1, "b")} {
+	for _, e := range []stag.DecisionRecord{ev(0, "a"), ev(1, "b")} {
 		if err := sa.Record(ctx, e); err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +293,7 @@ func FuzzChainIntegrity(f *testing.F) {
 
 // eventsFromBytes builds 0..5 events with fields varied by the fuzz input,
 // including arbitrary/invalid-UTF8 bytes to exercise canonical hashing.
-func eventsFromBytes(data []byte) []stag.ReleaseEvent {
+func eventsFromBytes(data []byte) []stag.DecisionRecord {
 	if len(data) == 0 {
 		return nil
 	}
@@ -292,16 +302,23 @@ func eventsFromBytes(data []byte) []stag.ReleaseEvent {
 	if len(data) > 1 {
 		frag = string(data[1:])
 	}
-	out := make([]stag.ReleaseEvent, 0, n)
+	out := make([]stag.DecisionRecord, 0, n)
 	for i := 0; i < n; i++ {
-		out = append(out, stag.ReleaseEvent{
-			SubjectOrigin:   "propose",
-			CollectedField:  "action",
-			TargetField:     fmt.Sprintf("t%d/%s", i, frag),
-			AuthorizingRule: fmt.Sprintf("r%d/%s", i, frag),
-			Actor:           "policy:incident",
-			Ordering:        int64(i),
-			RecipeHash:      frag,
+		out = append(out, stag.DecisionRecord{
+			Tool:       fmt.Sprintf("tool%d", i),
+			Verdict:    "allow",
+			Forwarded:  true,
+			Value:      frag,
+			RecipeHash: frag,
+			Events: []stag.ReleaseEvent{{
+				SubjectOrigin:   "propose",
+				CollectedField:  "action",
+				TargetField:     fmt.Sprintf("t%d/%s", i, frag),
+				AuthorizingRule: fmt.Sprintf("r%d/%s", i, frag),
+				Actor:           "policy:incident",
+				Ordering:        int64(i),
+				RecipeHash:      frag,
+			}},
 		})
 	}
 	return out

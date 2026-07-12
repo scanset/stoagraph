@@ -133,7 +133,9 @@ steps:
 
 - **Multi-argument gating** — route a tool to several arguments at once (e.g. `namespace,replicas`);
   each `propose out: X` binds the argument named `X`, so one recipe decides from the whole action
-  (e.g. "scaling *prod* escalates regardless of the count").
+  (e.g. "scaling *prod* escalates regardless of the count"). An argument you do NOT list is NOT judged —
+  see [routes.md](routes.md), which explains route bindings and the blast-radius trap that comes with
+  gating only the obvious argument.
 - **Human approval** — a `signed_equality` gate whose `signed:` value is `"$approved"` escalates until
   a human approves; approval mints a signed release for that exact action, and the retried call passes.
 
