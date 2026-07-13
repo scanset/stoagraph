@@ -91,7 +91,9 @@ cat <<EOF
   Next:
 
     stoagraph up      mint your control-plane role secrets, pull the signed images, start
-    stoagraph demo    watch an agent be prevented from exfiltrating an SSN (no API key needed)
+
+  Then open the console at http://localhost:3000 (the login link is printed by 'up') and wire your
+  first tool from the empty state, or start from examples/custom-tool.
 
   Verify what you just installed (we would):
 
