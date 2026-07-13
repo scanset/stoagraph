@@ -22,14 +22,14 @@ each service only what it is entitled to, *before anything starts*. That is the 
 `docker run` cannot do, and it is precisely the thing we made impossible to shortcut. `stoagraph up`
 does it and gets out of the way.
 
-Five containers, two Dockerfiles:
+Four containers by default (a fifth, `local-tools`, is opt-in), two Dockerfiles:
 
 | Service | Port | Image |
 |---|---|---|
 | `stag-serve` | 8080 | the **gate's** control plane — policy, approvals, audit |
 | `stag-proxy` | 8091 | the **gate's** MCP proxy — sessions bound to a recipe |
 | `harness-serve` | 8092 | the **orchestrator** — holds the model API keys (host `8092` → container `8090`) |
-| `local-tools` | 9300 | example local tool server — declared commands, no shell |
+| `local-tools` | 9300 | local tool server — declared commands, no shell. **Opt-in:** profile `tools` (see below) |
 | `console` | 3000 | one UI, two backends |
 
 The Go services all come from **one** `Dockerfile` (`--build-arg CMD=<binary>`), on

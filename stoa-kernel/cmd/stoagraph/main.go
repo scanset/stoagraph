@@ -93,6 +93,16 @@ func up() error {
 		}
 	}
 
+	// 3. the config dir the orchestrator bind-mounts. Make it OURSELVES, owned by the user.
+	//
+	// Docker creates a missing bind-mount source for you — as root. So on a fresh install this directory
+	// appeared root-owned, and the very next thing the docs tell you to do ("copy your models.json into
+	// config/") then needed sudo. Creating it first is the difference between a working quickstart and a
+	// permissions puzzle.
+	if err := os.MkdirAll("config", 0o755); err != nil {
+		return err
+	}
+
 	// `--pull missing` does the right thing in both worlds: a user with no images pulls the signed ones
 	// from GHCR; a contributor who just ran `docker compose build` uses what they built. compose.yml is
 	// pull-only, and compose.override.yml (present only in a clone) adds the build blocks.

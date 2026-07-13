@@ -2,7 +2,9 @@
 #
 #   docker compose up
 #
-# FIVE containers, not one. That is the security posture, not a diagram preference.
+# FOUR containers by default, not one. That is the security posture, not a diagram preference.
+# (A fifth, the local tool server, is OPT-IN behind the `tools` profile — it mounts a workspace you
+#  choose, and there is no sane default for "your project". See local-tools below.)
 #
 # THREE secrets, and the split is the whole security posture. What matters is that the ORCHESTRATOR —
 # which runs untrusted model output — can never approve its own escalations. That requires the token it
@@ -52,8 +54,11 @@ services:
       STAG_PUBLIC_URL: ${STAG_PUBLIC_URL:-http://localhost:8080}
     ports: ["8080:8080"]
     volumes:
+      # data ONLY. There used to be a `./examples:/app/examples:ro` mount here that nothing read: no
+      # code opens /app/examples. In a released install that directory does not exist, so Docker created
+      # it — root-owned — in whatever directory the user happened to run `stoagraph up` from. A mount
+      # that grants nothing and litters someone's filesystem is worse than no mount.
       - data:/app/data # config DB, the recipe store, the audit logs
-      - ./examples:/app/examples:ro
     healthcheck:
       test: ["CMD", "/app/healthcheck", "http://localhost:8080/health"]
       interval: 10s
@@ -140,11 +145,37 @@ services:
   # It holds no gate secret. Note the empty `environment:` — that is deliberate, not an oversight: a
   # process holding STAG_DISPATCH_TOKEN could bind itself a session to ANY recipe, and a tool server is
   # exactly the thing that must not be able to grant itself tools.
+  #
+  # OPT-IN, and that is not timidity — it is the same principle as the mount. This server exists to run
+  # real commands over a directory YOU choose, and there is no sane default for "your project". It used
+  # to start by default with the workspace pointed at a path that only exists inside a clone of this
+  # repo; for anyone who installed the released binary, Docker created that missing path AS A DIRECTORY,
+  # mounted the directory over /app/tools.yaml, and the server crash-looped on `read /app/tools.yaml:
+  # is a directory`. A service whose safety story is "you choose the blast radius" must not boot with a
+  # blast radius nobody chose.
+  #
+  # Turn it on when you have said what it may touch:
+  #
+  #   TOOLS_WORKSPACE=/path/to/your/project \
+  #   TOOLS_CONFIG=/path/to/your/tools.yaml \
+  #   docker compose --profile tools up -d
+  #
+  # (examples/local-tools/ in the repo has a tools.yaml to copy.)
   local-tools:
+    profiles: ["tools"]
     image: ghcr.io/scanset/stoagraph/local-tools:${STOAGRAPH_VERSION:-latest}
     command: ["-config", "/app/tools.yaml", "-root", "/workspace", "-http", ":9300"]
     volumes:
       # Point TOOLS_WORKSPACE at YOUR project. Read-only: a tool that cannot write cannot corrupt.
+      #
+      # These defaults only exist inside a CLONE, which is exactly why this service is behind a profile:
+      # if it started by default from a released install, Docker would create the missing source path as
+      # a DIRECTORY, mount that over /app/tools.yaml, and the server would crash-loop. Enabling the
+      # profile without setting both variables walks into the same trap, so set them.
+      #
+      # (A required-variable guard, ${TOOLS_WORKSPACE:?...}, cannot be used here: compose interpolates
+      # before it filters profiles, so it would break `up` for everyone, including people who never
+      # wanted this service.)
       - ${TOOLS_WORKSPACE:-./examples/local-tools}:/workspace:ro
       - ${TOOLS_CONFIG:-./examples/local-tools/tools.yaml}:/app/tools.yaml:ro
     environment: {} # NO gate secrets reach a tool server. Deliberately empty.

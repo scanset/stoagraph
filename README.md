@@ -11,7 +11,7 @@ Open source, Apache-2.0. No held-back edition.
 ## Quickstart
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.1.0/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.1.1/install.sh | sh
 stoagraph up        # mint secrets, pull the signed images, start, print a one-click login link
 ```
 

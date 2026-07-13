@@ -31,6 +31,14 @@ STAG_DISPATCH_TOKEN=$(gen)
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 
+# The local tool server is opt-in (compose profile "tools"), because it mounts a workspace YOU choose
+# and there is no sane default for "your project". In a CLONE the example workspace exists, so turn it
+# on here and \`docker compose up\` behaves as it always did. A RELEASED install leaves it off — its
+# defaults point into examples/, which a released install does not have, and Docker would create that
+# missing path as a directory, mount it over /app/tools.yaml and crash-loop the server.
+# Point TOOLS_WORKSPACE / TOOLS_CONFIG at your own project to gate real work.
+COMPOSE_PROFILES=tools
+
 # PROVIDER KEYS (optional but preferred): reference them from config/models.json via "apiKeyEnv"
 # instead of embedding a key in the file. The gate never sees either way.
 # ANTHROPIC_API_KEY=
