@@ -37,6 +37,10 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     strategy:
+      # One image failing must not CANCEL the other four. With the default (fail-fast: true), a single
+      # denied push took the whole matrix down mid-flight and left the registry holding one image out of
+      # five — a half-published release, which is worse than a failed one because it looks like it worked.
+      fail-fast: false
       matrix:
         include:
           # `target` is load-bearing: with none, Docker builds the LAST stage of the Dockerfile. Every
@@ -90,8 +94,15 @@ jobs:
 
   # The installer binary, for people who do not want to build anything. Checksums are published so the
   # one-liner can VERIFY what it downloaded instead of asking you to trust a pipe into your shell.
+  #
+  # It needs `images`, not just `check`, and that is a correctness requirement rather than tidiness.
+  # This job CREATES THE GITHUB RELEASE. When it only waited on `check`, a release could be published —
+  # binaries, checksums, signatures, the lot — while the image pushes were failing beside it. That is
+  # precisely what happened on v0.1.1: nine assets published, four of five images missing, and
+  # `stoagraph up` therefore broken for anyone who trusted the release page. A release must not exist
+  # until the artifacts it promises exist.
   cli:
-    needs: check
+    needs: [check, images]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
