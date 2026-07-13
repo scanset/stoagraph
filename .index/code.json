@@ -1,25 +1,6 @@
 {
   "files": [
     {
-      "doc": "Command example-pii is the pii-demo downstream MCP server \u2014 the containment story, in one binary.  fetch_user_profile(user_id)              INTERNAL read. Returns a profile that INCLUDES an SSN. send_external_reply(ticke",
-      "keywords": [
-        "example",
-        "downstream",
-        "pii",
-        "containment",
-        "mcp",
-        "server",
-        "stdio",
-        "streamable-http",
-        "egress",
-        "structural-not-scanning"
-      ],
-      "layer": "binary",
-      "package": "main",
-      "path": "stoa-kernel/cmd/example-pii/main.go",
-      "symbols": []
-    },
-    {
       "doc": "Command harness is the minimal orchestrator: it connects to a model (Claude) and routes the model's proposed tool calls through the stag-proxy MCP server, which gates each one. The model is the untrusted proposer; stag d",
       "keywords": [
         "cmd",
@@ -88,23 +69,6 @@
       "layer": "binary",
       "package": "main",
       "path": "stoa-kernel/cmd/healthcheck/main.go",
-      "symbols": []
-    },
-    {
-      "doc": "Command kbserve is the downstream context provider for the k8s demo (Planning/30). It embeds a markdown KB once (via ollama) and answers GET /context?q=<query> with the top-k relevant facts as plain text. stag's `http` c",
-      "keywords": [
-        "cmd",
-        "context-provider",
-        "read-channel",
-        "kb",
-        "embed",
-        "ollama",
-        "downstream",
-        "gate-stays-model-free"
-      ],
-      "layer": "binary",
-      "package": "main",
-      "path": "stoa-kernel/cmd/kbserve/main.go",
       "symbols": []
     },
     {
@@ -181,14 +145,13 @@
       "symbols": []
     },
     {
-      "doc": "Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up       mint the secrets, pull the signed images, start, print the ",
+      "doc": "Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate.  stoagraph up       mint the secrets, pull the signed images, start, print the login link stoagraph",
       "keywords": [
         "cli",
         "installer",
         "launcher",
         "up",
         "down",
-        "demo",
         "console",
         "login-link",
         "compose",
@@ -379,194 +342,6 @@
       "package": "dispatch",
       "path": "stoa-kernel/harness/dispatch/wiring.go",
       "symbols": []
-    },
-    {
-      "doc": "Package kb is the embedding knowledge base: basic RAG retrieval over markdown runbooks. It embeds docs + a query and returns the top-k by cosine similarity. A pure retrieval utility \u2014 it makes no trust or gate decision; ",
-      "keywords": [
-        "kb",
-        "rag",
-        "embedding",
-        "retrieval",
-        "cosine",
-        "topk",
-        "markdown",
-        "chunk",
-        "ollama",
-        "untrusted",
-        "enrichment",
-        "fail-closed"
-      ],
-      "layer": "orchestrator",
-      "package": "kb",
-      "path": "stoa-kernel/harness/kb/kb.go",
-      "symbols": [
-        {
-          "kw": [
-            "embedder",
-            "embed",
-            "text",
-            "to",
-            "vector"
-          ],
-          "line": 25,
-          "name": "Embedder"
-        },
-        {
-          "kw": [
-            "ollama",
-            "embedder",
-            "endpoint",
-            "model",
-            "key"
-          ],
-          "line": 30,
-          "name": "OllamaEmbedder"
-        },
-        {
-          "kw": [
-            "embed",
-            "call",
-            "embeddings",
-            "api",
-            "fail-closed"
-          ],
-          "line": 38,
-          "name": "Embed"
-        },
-        {
-          "kw": [
-            "doc",
-            "id",
-            "source",
-            "text",
-            "vec",
-            "score"
-          ],
-          "line": 86,
-          "name": "Doc"
-        },
-        {
-          "kw": [
-            "mem",
-            "store",
-            "embedder",
-            "docs"
-          ],
-          "line": 95,
-          "name": "MemStore"
-        },
-        {
-          "kw": [
-            "new",
-            "store",
-            "pre-embedded",
-            "docs"
-          ],
-          "line": 101,
-          "name": "NewStore"
-        },
-        {
-          "kw": [
-            "load",
-            "dir",
-            "markdown",
-            "chunk",
-            "embed",
-            "fail-closed"
-          ],
-          "line": 106,
-          "name": "LoadDir"
-        },
-        {
-          "kw": [
-            "retrieve",
-            "embed",
-            "query",
-            "cosine",
-            "topk",
-            "fail-closed"
-          ],
-          "line": 138,
-          "name": "Retrieve"
-        },
-        {
-          "kw": [
-            "chunk",
-            "markdown",
-            "by",
-            "section"
-          ],
-          "line": 164,
-          "name": "Chunk"
-        },
-        {
-          "kw": [
-            "cosine",
-            "similarity",
-            "bounded",
-            "no-nan"
-          ],
-          "line": 193,
-          "name": "Cosine"
-        }
-      ]
-    },
-    {
-      "doc": "Package claude is the Claude proposer adapter: a model.Proposer that calls the Anthropic Messages API and returns the completion as an untrusted proposal. The anthropic SDK dependency is quarantined here.",
-      "keywords": [
-        "claude",
-        "proposer",
-        "adapter",
-        "anthropic",
-        "messages",
-        "api",
-        "untrusted",
-        "transport",
-        "quarantine",
-        "fail-closed"
-      ],
-      "layer": "orchestrator",
-      "package": "claude",
-      "path": "stoa-kernel/harness/model/claude/claude.go",
-      "symbols": [
-        {
-          "kw": [
-            "claude",
-            "proposer",
-            "strategy",
-            "model",
-            "maxtokens",
-            "client"
-          ],
-          "line": 24,
-          "name": "Claude"
-        },
-        {
-          "kw": [
-            "new",
-            "claude",
-            "inject",
-            "options",
-            "client"
-          ],
-          "line": 31,
-          "name": "New"
-        },
-        {
-          "kw": [
-            "propose",
-            "call",
-            "messages",
-            "api",
-            "untrusted",
-            "fail-closed",
-            "no",
-            "temperature"
-          ],
-          "line": 36,
-          "name": "Propose"
-        }
-      ]
     },
     {
       "doc": "Package model is the proposer boundary: the untrusted agent side. A strategy seam that produces the proposal the kernel gates, conferring zero trust - a Proposal has nowhere to put trust, and Decide's verdict depends onl",
@@ -1318,8 +1093,6 @@
         "decision",
         "rollup",
         "conjunction",
-        "disjunction",
-        "negation",
         "gate",
         "fail-safe"
       ],
@@ -1368,44 +1141,13 @@
         {
           "kw": [
             "verdict",
-            "or",
-            "disjunction",
-            "min",
-            "restrictive"
-          ],
-          "line": 54,
-          "name": "Or"
-        },
-        {
-          "kw": [
-            "verdict",
-            "negate",
-            "involution"
-          ],
-          "line": 62,
-          "name": "Negate"
-        },
-        {
-          "kw": [
-            "verdict",
             "andall",
             "fold",
             "identity",
             "allow"
           ],
-          "line": 74,
+          "line": 54,
           "name": "AndAll"
-        },
-        {
-          "kw": [
-            "verdict",
-            "orall",
-            "fold",
-            "identity",
-            "deny"
-          ],
-          "line": 83,
-          "name": "OrAll"
         }
       ]
     },
@@ -1604,10 +1346,13 @@
       "doc": "",
       "keywords": [
         "trust",
-        "lattice",
+        "class",
+        "ordered",
+        "levels",
+        "origin",
+        "label",
         "information",
-        "flow",
-        "semilattice"
+        "flow"
       ],
       "layer": "gate",
       "package": "trust",
@@ -1643,26 +1388,6 @@
           ],
           "line": 32,
           "name": "ParseTrustClass"
-        },
-        {
-          "kw": [
-            "join",
-            "two",
-            "trust",
-            "classes"
-          ],
-          "line": 46,
-          "name": "Join"
-        },
-        {
-          "kw": [
-            "join",
-            "multiple",
-            "trust",
-            "classes"
-          ],
-          "line": 54,
-          "name": "JoinAll"
         }
       ]
     },

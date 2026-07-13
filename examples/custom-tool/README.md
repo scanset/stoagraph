@@ -37,7 +37,7 @@ curl -s -H "Authorization: Bearer $ADMIN" -X POST localhost:8080/api/mcp-servers
 curl -s -H "Authorization: Bearer $ADMIN" -X POST localhost:8080/api/recipes --data-binary @recipe.yaml
 # route the tool to it — gate the `channel` argument
 curl -s -H "Authorization: Bearer $ADMIN" -X POST localhost:8080/api/routes \
-  -d '{"tool":"notify","recipe":"notify_policy","gateArg":"channel"}'
+  -d '{"tool":"notify","server":"my-tools","recipe":"notify_policy","gateArg":"channel"}'
 ```
 
 ## 4. See it enforced

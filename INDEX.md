@@ -64,16 +64,13 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 
 ### `stoa-kernel/stag/internal/gate/verdict.go`
 
-**kw:** verdict · decision · rollup · conjunction · disjunction · negation · gate · fail-safe
+**kw:** verdict · decision · rollup · conjunction · gate · fail-safe
 
 - `Verdict` (:8) — verdict · type · gate · decision · rollup
 - `String` (:18) — verdict · string
 - `ParseVerdict` (:32) — parse · verdict
 - `And` (:46) — verdict · and · conjunction · max · restrictive
-- `Or` (:54) — verdict · or · disjunction · min · restrictive
-- `Negate` (:62) — verdict · negate · involution
-- `AndAll` (:74) — verdict · andall · fold · identity · allow
-- `OrAll` (:83) — verdict · orall · fold · identity · deny
+- `AndAll` (:54) — verdict · andall · fold · identity · allow
 
 ### `stoa-kernel/stag/internal/record/canonicalhash.go`
 
@@ -107,13 +104,11 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 
 ### `stoa-kernel/stag/internal/trust/trust.go`
 
-**kw:** trust · lattice · information · flow · semilattice
+**kw:** trust · class · ordered · levels · origin · label · information · flow
 
 - `TrustClass` (:8) — represent · trust · levels
 - `String` (:18) — convert · trust · class · to · string
 - `ParseTrustClass` (:32) — parse · string · to · trust · class
-- `Join` (:46) — join · two · trust · classes
-- `JoinAll` (:54) — join · multiple · trust · classes
 
 ### `stoa-kernel/stag/notify/notify.go`
 Package notify is the OPTIONAL push side of the human-approval loop (Stage 5): a fire-and-forget webhook that POSTs a pending-approval notice to an external system (Slack/PagerDuty/an existing change-approval flow) when 
@@ -397,31 +392,6 @@ Package dispatch routes an EVENT to a RECIPE, then (slice 2) binds a session and
 
 **kw:** wiring · stag-serve · catalog · routes-for-recipe · session · binder · daemon · post-sessions · token
 
-### `stoa-kernel/harness/kb/kb.go`
-Package kb is the embedding knowledge base: basic RAG retrieval over markdown runbooks. It embeds docs + a query and returns the top-k by cosine similarity. A pure retrieval utility — it makes no trust or gate decision; 
-
-**kw:** kb · rag · embedding · retrieval · cosine · topk · markdown · chunk · ollama · untrusted · enrichment · fail-closed
-
-- `Embedder` (:25) — embedder · embed · text · to · vector
-- `OllamaEmbedder` (:30) — ollama · embedder · endpoint · model · key
-- `Embed` (:38) — embed · call · embeddings · api · fail-closed
-- `Doc` (:86) — doc · id · source · text · vec · score
-- `MemStore` (:95) — mem · store · embedder · docs
-- `NewStore` (:101) — new · store · pre-embedded · docs
-- `LoadDir` (:106) — load · dir · markdown · chunk · embed · fail-closed
-- `Retrieve` (:138) — retrieve · embed · query · cosine · topk · fail-closed
-- `Chunk` (:164) — chunk · markdown · by · section
-- `Cosine` (:193) — cosine · similarity · bounded · no-nan
-
-### `stoa-kernel/harness/model/claude/claude.go`
-Package claude is the Claude proposer adapter: a model.Proposer that calls the Anthropic Messages API and returns the completion as an untrusted proposal. The anthropic SDK dependency is quarantined here.
-
-**kw:** claude · proposer · adapter · anthropic · messages · api · untrusted · transport · quarantine · fail-closed
-
-- `Claude` (:24) — claude · proposer · strategy · model · maxtokens · client
-- `New` (:31) — new · claude · inject · options · client
-- `Propose` (:36) — propose · call · messages · api · untrusted · fail-closed · no · temperature
-
 ### `stoa-kernel/harness/model/model.go`
 Package model is the proposer boundary: the untrusted agent side. A strategy seam that produces the proposal the kernel gates, conferring zero trust - a Proposal has nowhere to put trust, and Decide's verdict depends onl
 
@@ -455,11 +425,6 @@ Package store is the event_harness's own model-provider config: which models the
 
 > cmd/ — the shipped binaries; each is its own container.
 
-### `stoa-kernel/cmd/example-pii/main.go`
-Command example-pii is the pii-demo downstream MCP server — the containment story, in one binary.  fetch_user_profile(user_id)              INTERNAL read. Returns a profile that INCLUDES an SSN. send_external_reply(ticke
-
-**kw:** example · downstream · pii · containment · mcp · server · stdio · streamable-http · egress · structural-not-scanning
-
 ### `stoa-kernel/cmd/harness-serve/dispatch.go`
 
 **kw:** dispatch · ingress · event->recipe->session->agent · turnkey · governed-agent · sse · stream
@@ -479,11 +444,6 @@ Command healthcheck is a container liveness probe: GET a URL, exit 0 on 2xx, 1 o
 
 **kw:** container · liveness · probe · static · distroless · no-shell · exit-code
 
-### `stoa-kernel/cmd/kbserve/main.go`
-Command kbserve is the downstream context provider for the k8s demo (Planning/30). It embeds a markdown KB once (via ollama) and answers GET /context?q=<query> with the top-k relevant facts as plain text. stag's `http` c
-
-**kw:** cmd · context-provider · read-channel · kb · embed · ollama · downstream · gate-stays-model-free
-
 ### `stoa-kernel/cmd/stag-proxy/main.go`
 Command stag-proxy is the standing gating MCP server — the front door an agent host connects to (Planning/24). It is an MCP SERVER to the agent and an MCP CLIENT to the real downstream server, with the deterministic gate
 
@@ -502,9 +462,9 @@ Command stag-tools serves a DECLARED set of local commands to an agent as MCP to
 **kw:** cmd · stag-tools · local · tools · mcp · stdio · http · declared · no-shell · gate-able
 
 ### `stoa-kernel/cmd/stoagraph/main.go`
-Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up       mint the secrets, pull the signed images, start, print the 
+Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate.  stoagraph up       mint the secrets, pull the signed images, start, print the login link stoagraph
 
-**kw:** cli · installer · launcher · up · down · demo · console · login-link · compose · ghcr · role-secrets · mint · one-click
+**kw:** cli · installer · launcher · up · down · console · login-link · compose · ghcr · role-secrets · mint · one-click
 
 ## other
 

@@ -12,7 +12,6 @@ Everything runs from the repo root. There is one Go module (`stoa-kernel`) and o
 | `tools/down.sh` | Stop everything. Leaves `data/` intact. |
 | `tools/check.sh` | **The gate for a change:** gofmt · vet · test · architecture · typecheck · hygiene. |
 | `tools/hygiene.sh` | Repo invariants that fail silently if nobody looks. |
-| `tools/demo.sh` | Load the containment demo into a running gate (no model or API key needed). |
 | **`tools/find.sh <words>`** | **Find the code that does a thing.** Searches the keyword markers, not identifiers. Start here. |
 | `tools/index.sh` | Rebuild `INDEX.md` + `.index/code.json` from the `// file-kw:` / `// kw:` markers. |
 | `tools/sbom.sh` | SBOM of the shipped images (CycloneDX) + a copyleft gate. |
@@ -78,9 +77,13 @@ If that test goes red, it is not a style violation. The claim is false and the b
 |---|---|---|
 | `stag-serve` | 8080 | The gate's control plane: policy, approvals, audit. No model, no keys. |
 | `stag-proxy` | 8091 | The gate's MCP proxy. Sessions are bound to a recipe here. |
-| `harness-serve` | 8092 | The orchestrator's API. **Holds the model keys.** |
-| `kbserve` | 8095 | Example context provider (the READ channel's downstream). |
+| `harness-serve` | 8090 (host) / 8092 under Docker | The orchestrator's API. **Holds the model keys.** |
 | console | 3000 | One UI, talking to both backends. |
+
+`harness-serve`'s default is `-addr :8090`, so that is the port on the host. Under Docker, `compose.yml`
+remaps it to host **8092** → container **8090** — because `:8090` is also what the OAuth test server
+(below) wants, and running both on the host at once collides. Both numbers are correct; which one you
+see depends on whether you are on the host or in the container.
 
 Three secrets (`stoagraph up` mints them, `.env`): **console** (author policy + approve),
 **operator** (models + dispatch), **dispatch** (machine-only — the orchestrator binds sessions, and
@@ -94,7 +97,7 @@ that makes the whole thing safe: the orchestrator is never given an approve-capa
 |---|---|
 | `data/` | **All runtime state** — `config.db`, **`recipes/`** (the gate reads *and writes* it), `control.tokens`, `approval.key`, audit logs. **Gitignored**; the binaries create it. `rm -rf data` for a clean slate. |
 | `config/` | `event_map.json`, and `models.json` (your keys — gitignored; copy `models.example.json`). |
-| `examples/` | `k8s` (a real cluster), `pii-demo`, `zt-ops`, `scratch`. **Each example carries its own recipes**, which its `setup.sh` loads into the gate. |
+| `examples/` | `custom-tool` (bring your own MCP tool), `local-tools` (declared local commands, no shell), `oauth-profiles` (downstream auth profiles). **Each example carries its own recipe(s) and a README** showing how to register and route it. |
 
 A fresh instance boots **empty** — 0 recipes, 0 routes, 0 policies. The recipe store is runtime state,
 not shipped content, so nothing is trusted until you author or load it. `stag-serve -recipe <file>` will
@@ -140,8 +143,5 @@ plus committed binaries. Run it in CI.
 ## Testing notes
 
 - `go test ./...` from `stoa-kernel/` covers kernel, policy linter, proxy, auth, and the architecture rule.
-- The k8s example test (`cmd/stag-proxy/e2e_test.go`) skips cleanly when `python3` or the example server
-  is absent — but the path is **relative**, so it actually runs in CI. (It used to be an absolute path,
-  which meant it silently skipped everywhere except one laptop.)
 - Auth tests assert the load-bearing negative: `TestDispatchCannotApprove`. If it ever passes a
   `dispatch` token to an approve route, human-in-the-loop is gone.

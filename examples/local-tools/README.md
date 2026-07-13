@@ -31,7 +31,7 @@ rules:
 ```
 ```bash
 curl -H "Authorization: Bearer $STAG_CONSOLE_TOKEN" -X POST localhost:8080/api/routes \
-  -d '{"tool":"read_file","recipe":"local_read_policy","gateArg":"path"}'
+  -d '{"tool":"read_file","server":"local-tools","recipe":"local_read_policy","gateArg":"path"}'
 ```
 
 `read_file("README.md")` → **ALLOW**. `read_file("/etc/passwd")` → **DENY**, before the tool ever runs.

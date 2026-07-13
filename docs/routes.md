@@ -5,11 +5,15 @@ does is possible without one, and the most important thing about routes is what 
 isn't one.
 
 ```
-route  =  tool  →  recipe  →  gateArg
-          ^^^^     ^^^^^^     ^^^^^^^
-          which    which      which argument(s) the
-          tool     policy     policy actually judges
+route  =  tool  →  server  →  recipe  →  gateArg
+          ^^^^     ^^^^^^     ^^^^^^     ^^^^^^^
+          which    which      which      which argument(s) the
+          tool     server     policy     policy actually judges
 ```
+
+The `server` is part of the binding — it names the MCP server that serves the tool, and the gate never
+infers it from the tool name, so a route means the same thing tomorrow even after you register another
+server that happens to expose the same tool.
 
 ## The rule that matters: no route, no call
 
@@ -35,7 +39,7 @@ Console → **Adapters** → route a tool. Or:
 
 ```bash
 curl -H "Authorization: Bearer $STAG_CONSOLE_TOKEN" -X POST localhost:8080/api/routes \
-  -d '{"tool":"get_file_contents","recipe":"github_repo_policy","gateArg":"owner,repo"}'
+  -d '{"tool":"get_file_contents","server":"github","recipe":"github_repo_policy","gateArg":"owner,repo"}'
 ```
 
 A route whose recipe is missing or fails the linter is **rejected at build** (`router.Build` collects it
@@ -48,8 +52,8 @@ as an error and does not install it), so a typo'd recipe name cannot silently op
 list**:
 
 ```json
-{"tool":"notify",            "recipe":"notify_policy",     "gateArg":"channel"}
-{"tool":"scale_deployment",  "recipe":"k8s_scale_policy",  "gateArg":"namespace,replicas"}
+{"tool":"notify",            "server":"chatops",  "recipe":"notify_policy",     "gateArg":"channel"}
+{"tool":"scale_deployment",  "server":"k8s",      "recipe":"k8s_scale_policy",  "gateArg":"namespace,replicas"}
 ```
 
 Each listed name binds the recipe's `propose out: <name>` slot of the same name, so one recipe can decide
@@ -78,7 +82,7 @@ rules:
   repo.allowed: {kind: set_membership, set: ["stoagraph"]}
 ```
 ```json
-{"tool":"get_file_contents","recipe":"github_repo_policy","gateArg":"repo"}
+{"tool":"get_file_contents","server":"github","recipe":"github_repo_policy","gateArg":"repo"}
 ```
 
 Intent: *"the agent may read our repo."* Actual effect:
@@ -102,7 +106,7 @@ steps:
   - {id: check_repo,  kind: sink, in: repo,  field: github.repo,  sensitivity: authoritative, rule: repo.allowed,  actor: "policy:github"}
 ```
 ```json
-{"tool":"get_file_contents","recipe":"github_repo_policy","gateArg":"owner,repo"}
+{"tool":"get_file_contents","server":"github","recipe":"github_repo_policy","gateArg":"owner,repo"}
 ```
 
 Now `mallory/stoagraph` and `scanset/secret-repo` are both denied.
@@ -117,7 +121,7 @@ Every one of those belongs in `gateArg`.
 `approval_token`, and the route must list it so the gate can bind it:
 
 ```json
-{"tool":"scale_deployment","recipe":"k8s_scale_approval_policy","gateArg":"namespace,replicas,approval_token"}
+{"tool":"scale_deployment","server":"k8s","recipe":"k8s_scale_approval_policy","gateArg":"namespace,replicas,approval_token"}
 ```
 
 It never appears in the audit record's value — the gate strips it, because it is a credential, not a fact
@@ -150,7 +154,7 @@ There are two ways routes reach the gate, and they are not the same thing:
 - **The global route table** (`/api/routes`, stored in `config.db`) — what the console manages, and what a
   stdio gate uses.
 - **Session routes** — in daemon mode the trusted dispatcher binds a session with its own route set:
-  `POST /sessions {routes:[{tool,recipe,gateArg}]}`. The agent connects to `/mcp/<token>` and gets
+  `POST /sessions {routes:[{tool,server,recipe,gateArg}]}`. The agent connects to `/mcp/<token>` and gets
   **only** those routes. The agent cannot choose its own recipe, and a session with no routes binds
   nothing. See [mcp-gating-proxy.md](mcp-gating-proxy.md).
 

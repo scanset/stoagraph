@@ -2,7 +2,6 @@
 
 ```bash
 stoagraph up      # mints the secrets, pulls the signed images, starts, prints your login link
-stoagraph demo    # loads the containment demo
 ```
 
 `compose.yml` is **pull-only** — it references published images and nothing on your disk, so it works
@@ -12,7 +11,7 @@ adds the `build:` blocks, so `docker compose build` still builds from source.
 Doing it by hand:
 
 ```bash
-tools/gen-env.sh && docker compose up -d && tools/demo.sh
+tools/gen-env.sh && docker compose up -d
 ```
 
 ## Why there is no `docker run` one-liner
@@ -23,15 +22,14 @@ each service only what it is entitled to, *before anything starts*. That is the 
 `docker run` cannot do, and it is precisely the thing we made impossible to shortcut. `stoagraph up`
 does it and gets out of the way.
 
-Six containers, two Dockerfiles:
+Five containers, two Dockerfiles:
 
 | Service | Port | Image |
 |---|---|---|
 | `stag-serve` | 8080 | the **gate's** control plane — policy, approvals, audit |
 | `stag-proxy` | 8091 | the **gate's** MCP proxy — sessions bound to a recipe |
-| `harness-serve` | 8092 | the **orchestrator** — holds the model API keys |
-| `kbserve` | 8095 | example context provider (the READ channel's downstream) |
-| `pii-demo` | 9000 | an example tool server (streamable HTTP) — the containment demo |
+| `harness-serve` | 8092 | the **orchestrator** — holds the model API keys (host `8092` → container `8090`) |
+| `local-tools` | 9300 | example local tool server — declared commands, no shell |
 | `console` | 3000 | one UI, two backends |
 
 The Go services all come from **one** `Dockerfile` (`--build-arg CMD=<binary>`), on
@@ -94,27 +92,6 @@ POST /sessions  503 {"error":"gate not ready: no downstream MCP server connected
 That is fail-closed, not a fault. A gate with nothing to mediate must not pretend it is mediating. It
 polls for a downstream and starts serving the moment one is registered — no restart needed.
 
-## The demo
-
-```bash
-tools/demo.sh
-```
-
-That authors the policy, registers the `pii-demo` tool server, and routes the tools. `stag-proxy` picks
-the downstream up on its next poll and flips to `ready`. Then, with **no model and no API key**:
-
-```
-fetch_user_profile(123)                          ALLOW  — returns Alice's record, INCLUDING her SSN
-send_external_reply("Your SSN is 000-12-3456")   DENY   — never reaches the tool
-send_external_reply("Hi Alice, you're unlocked") DENY   — still free-form
-send_external_reply("tmpl:account_unlocked")     ALLOW  — an approved template
-```
-
-Look at the third line. A perfectly innocent message is *also* blocked — because **no free-form value
-can cross at all.** The policy does not scan for SSNs; it permits four template ids. That is why a
-jailbroken or prompt-injected model cannot defeat it: there is no clever phrasing that becomes an
-approved template id. **Containment is structural, not content-based.**
-
 ## Registering your own downstream
 
 A containerized gate cannot *spawn* a `stdio` MCP server — and we would rather keep the gate distroless
@@ -127,12 +104,9 @@ curl -s -H "Authorization: Bearer $ADMIN" -X POST localhost:8080/api/mcp-servers
   -d '{"name":"my-tools","transport":"http","target":"http://my-tools:9000/mcp"}'
 ```
 
-`cmd/example-pii` is a 60-line reference for what such a server looks like (it serves stdio *and*
-streamable HTTP from the same binary).
-
-The **k8s example** (a live cluster: gated reads, prod mutations that escalate to a human) still runs
-`stdio` and needs a real cluster, so drive it on the host: `tools/up.sh` then `bash
-examples/k8s/setup.sh`.
+`examples/custom-tool` is a minimal reference for what such a server looks like (it serves stdio *and*
+streamable HTTP from the same binary). `examples/local-tools` shows the shipped `stag-tools` server run
+the same way.
 
 ## Operational notes
 

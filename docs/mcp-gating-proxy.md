@@ -43,10 +43,10 @@ A standing server. A trusted controller binds a session to a recipe and hands th
 endpoint; the agent cannot choose its own recipe.
 
 ```
-stag-proxy -http :8091 -downstream <your-mcp-server>
+stag-proxy -http :8091          # fronts every enabled downstream; each route names which server serves it
 ```
 
-- `POST /sessions {routes:[{tool,recipe,gateArg}]}` → `{token, path}` — the control plane (trusted).
+- `POST /sessions {routes:[{tool,server,recipe,gateArg}]}` → `{token, path}` — the control plane (trusted).
 - The agent connects to `/mcp/<token>` (streamable HTTP); every call is gated by that session's recipe,
   and the session's `tools/list` shows only the tools that recipe governs.
 - An unknown token → `400` (fail closed). Idle sessions are closed after 30 minutes.
@@ -92,7 +92,10 @@ gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
 - **Scalar gated arguments.** A recipe gates named arguments (e.g. `namespace`, `replicas`), compared
   as strings; non-scalar arguments are stringified. Which arguments a tool's policy judges is set by its
   route — see [routes.md](routes.md).
-- **One downstream per proxy.** Fronting several MCP servers from a single gate is still a v1.1 item.
+- **Multi-server fleet.** The gate fronts several MCP servers at once. A route names its `server` (a
+  route is tool → server → recipe → gateArg); the gate connects every enabled downstream and dispatches a
+  cleared call to the named one. It never infers the server from the tool name, so registering another
+  server that happens to expose the same tool name cannot silently re-point a route you already wrote.
 - **`http` context providers.** The `rag` and `mcp_resource` provider kinds are reserved and fail closed
   (an unbuildable provider is dropped from the session, never fabricated). Keeping retrieval in a
   *downstream* provider is deliberate: it is what lets the gate stay model-free.

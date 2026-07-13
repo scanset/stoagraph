@@ -4,6 +4,17 @@ StoaGraph is a security control, so its guarantees — and its limits — must b
 states what the gate protects, what it does **not**, the trust boundaries, and the operator's
 responsibilities. If you are evaluating StoaGraph, read **Non-goals** as carefully as **Guarantees**.
 
+## Reporting a vulnerability
+
+Report suspected vulnerabilities privately. Do not open a public issue for a security problem.
+
+The preferred channel is a GitHub private security advisory:
+https://github.com/scanset/stoagraph/security/advisories/new. You can also email security@scanset.io.
+
+We follow coordinated disclosure: please give us up to 90 days to ship a fix before you disclose
+publicly. We will acknowledge the report, keep you updated, and credit you when the fix ships unless you
+prefer to stay anonymous.
+
 ## What StoaGraph provides
 
 A **deterministic mediation boundary** between an AI agent and the world. Every governed tool call is
@@ -121,8 +132,3 @@ Being explicit here is the point.
   Ship signed audit checkpoints off-box.
 - **Review recipes as policy.** Changes to recipes and routes are security changes.
 - **Rotate a leaked key, do not just delete the repo.** A pushed secret is a leaked secret.
-
-## Reporting a vulnerability
-
-Please report suspected vulnerabilities privately to the maintainers rather than opening a public issue.
-(Coordinated-disclosure contact to be finalized before the public release.)

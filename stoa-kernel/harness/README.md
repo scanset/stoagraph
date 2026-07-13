@@ -48,11 +48,11 @@ Claude tool-use loop — every tool call the model proposes is routed **through 
 reach the real downstream. The harness holds the model key (env var); the stag gate never does.
 
 ```bash
-# build stag-proxy (stag module) + this harness
-go build -o /tmp/stag-proxy ../harness/workspaces/stag/cmd/stag-proxy
+# build stag-proxy (the gate) + this harness, from the stoa-kernel module root
+go build -o /tmp/stag-proxy ./cmd/stag-proxy
 go build -o /tmp/harness ./cmd/harness
-# run the loop (from the repo root, so stag-proxy finds deploy/mcp/*)
-ANTHROPIC_API_KEY=<key> /tmp/harness -proxy "/tmp/stag-proxy -downstream pii-demo" -input "<the ticket text>"
+# run one governed agent turn-loop against a registered downstream MCP server
+ANTHROPIC_API_KEY=<key> /tmp/harness -proxy "/tmp/stag-proxy -downstream my-tools" -input "<the task text>"
 ```
 
 ## What's NOT here yet (the next builds)
