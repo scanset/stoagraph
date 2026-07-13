@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/router"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/store"
 )
@@ -39,14 +40,17 @@ func (s *Server) handleRouteList(w http.ResponseWriter, r *http.Request) {
 		specs = append(specs, router.Spec{Tool: rt.Tool, Server: rt.Server, Recipe: rt.Recipe, GateArg: rt.GateArg})
 	}
 	resolved := router.Build(specs, s.Recipes.Get)
+	// Keyed by the ADVERTISED name, because a bare tool name no longer identifies one route: the same
+	// tool on two servers is two bindings, each with its own recipe and its own resolution status.
 	errBy := map[string]string{}
 	for _, e := range resolved.Errors {
-		errBy[e.Tool] = e.Err
+		errBy[proxy.AdvertisedName(e.Server, e.Tool)] = e.Err
 	}
 	out := make([]RouteView, 0, len(routes))
 	for _, rt := range routes {
-		_, ok := resolved.Router[rt.Tool]
-		out = append(out, RouteView{Tool: rt.Tool, Server: rt.Server, Recipe: rt.Recipe, GateArg: rt.GateArg, Valid: ok, Error: errBy[rt.Tool]})
+		adv := proxy.AdvertisedName(rt.Server, rt.Tool)
+		_, ok := resolved.Router[adv]
+		out = append(out, RouteView{Tool: rt.Tool, Server: rt.Server, Recipe: rt.Recipe, GateArg: rt.GateArg, Valid: ok, Error: errBy[adv]})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -95,15 +99,23 @@ func (s *Server) handleRoutePut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tool": req.Tool, "server": req.Server, "recipe": req.Recipe, "gateArg": req.GateArg})
 }
 
-// DELETE /api/routes/{tool}
+// DELETE /api/routes/{server}/{tool}
+//
+// Both halves of the key, because a route is (server, tool): deleting `search_code` on `github` must
+// leave `search_code` on `local` alone, and a tool name by itself cannot say which was meant.
 func (s *Server) handleRouteDelete(w http.ResponseWriter, r *http.Request) {
 	if s.Store == nil {
 		writeJSON(w, http.StatusNotImplemented, errObj("no config store"))
 		return
 	}
-	if err := s.Store.DeleteRoute(r.Context(), r.PathValue("tool")); err != nil {
+	tool, server := r.PathValue("tool"), r.PathValue("server")
+	if tool == "" || server == "" {
+		writeJSON(w, http.StatusBadRequest, errObj("delete needs both a server and a tool"))
+		return
+	}
+	if err := s.Store.DeleteRoute(r.Context(), tool, server); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errObj(err.Error()))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": r.PathValue("tool")})
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": proxy.AdvertisedName(server, tool)})
 }

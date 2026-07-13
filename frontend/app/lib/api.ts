@@ -247,7 +247,10 @@ export const deleteProvider = (name: string) => jdelete(`/api/providers/${encode
 export const listRoutes = () => jget<RouteView[]>("/api/routes");
 export const addRoute = (r: { tool: string; server: string; recipe: string; gateArg: string }) =>
   jpost<{ tool: string }>("/api/routes", r);
-export const deleteRoute = (tool: string) => jdelete(`/api/routes/${encodeURIComponent(tool)}`);
+// A route is keyed by (server, tool), not by the tool alone: the same tool name may be routed on two
+// servers, so deleting `search_code` on `github` must leave `search_code` on `local` untouched.
+export const deleteRoute = (server: string, tool: string) =>
+  jdelete(`/api/routes/${encodeURIComponent(server)}/${encodeURIComponent(tool)}`);
 
 /* ------------------------------ approvals (Stage 5) ------------------------------ */
 

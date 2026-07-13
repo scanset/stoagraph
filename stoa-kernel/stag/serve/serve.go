@@ -178,7 +178,7 @@ func (s *Server) Handler() http.Handler {
 	// routes (tool -> recipe bindings; the multi-tool gate is driven by these)
 	mux.HandleFunc("GET /api/routes", read(s.handleRouteList))
 	mux.HandleFunc("POST /api/routes", admin(s.handleRoutePut))
-	mux.HandleFunc("DELETE /api/routes/{tool}", admin(s.handleRouteDelete))
+	mux.HandleFunc("DELETE /api/routes/{server}/{tool}", admin(s.handleRouteDelete))
 	// MCP servers (the ACT channel adapters): add/discover/list/delete downstream servers
 	mux.HandleFunc("GET /api/mcp-servers", read(s.handleMCPList))
 	mux.HandleFunc("POST /api/mcp-servers", admin(s.handleMCPPut))

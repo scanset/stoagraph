@@ -48,7 +48,7 @@ func TestAdvertisesOnlyRoutedTools(t *testing.T) {
 	}
 	sink := &recSink{}
 	gate := proxy.Gate{Routes: proxy.Router{
-		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream"},
+		proxy.AdvertisedName("downstream", "write_note"): {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream", Tool: "write_note"},
 	}, Sink: sink}
 
 	all := []*mcp.Tool{
@@ -76,7 +76,7 @@ func TestAdvertisesOnlyRoutedTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Tools) != 1 || res.Tools[0].Name != "write_note" {
+	if len(res.Tools) != 1 || res.Tools[0].Name != "downstream__write_note" {
 		names := make([]string, 0, len(res.Tools))
 		for _, tl := range res.Tools {
 			names = append(names, tl.Name)

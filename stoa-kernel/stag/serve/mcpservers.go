@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/store"
 )
 
@@ -104,6 +105,15 @@ func (s *Server) handleMCPPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if json.Unmarshal(body, &req) != nil || req.Name == "" || req.Target == "" {
 		writeJSON(w, http.StatusBadRequest, errObj("server needs a name and target"))
+		return
+	}
+	// The server name becomes half of every advertised tool name (<server>__<tool>), which is handed to
+	// a model verbatim. Reject anything the provider tool-use APIs would refuse (^[a-zA-Z0-9_-]+$), and
+	// reject a name containing the "__" separator, which would make the advertised name ambiguous to
+	// split. Caught here, at authoring time, rather than mangled silently at advertise time.
+	if !proxy.ValidServerName(req.Name) {
+		writeJSON(w, http.StatusBadRequest, errObj(
+			`server name must match [a-zA-Z0-9_-]+ and must not contain "__" (it prefixes every tool name the agent sees)`))
 		return
 	}
 	if req.Transport != "stdio" && req.Transport != "http" {

@@ -21,9 +21,13 @@ type Spec struct {
 	GateArg string
 }
 
-// kw: route error tool recipe reason unresolved
+// RouteError names the binding that failed to resolve. It carries the SERVER as well as the tool:
+// a bare tool name no longer identifies one route, so an error reported against `search_code` alone
+// could not say which of two servers' bindings was broken.
+// kw: route error tool server recipe reason unresolved
 type RouteError struct {
 	Tool   string
+	Server string
 	Recipe string
 	Err    string
 }
@@ -40,7 +44,7 @@ func Build(specs []Spec, loadRecipe func(name string) ([]byte, error)) Resolved 
 	for _, sp := range specs {
 		src, err := loadRecipe(sp.Recipe)
 		if err != nil {
-			res.Errors = append(res.Errors, RouteError{Tool: sp.Tool, Recipe: sp.Recipe, Err: err.Error()})
+			res.Errors = append(res.Errors, RouteError{Tool: sp.Tool, Server: sp.Server, Recipe: sp.Recipe, Err: err.Error()})
 			continue
 		}
 		// Compose: a routed recipe may inline sub-recipes (goto_recipe); resolve them via
@@ -48,10 +52,20 @@ func Build(specs []Spec, loadRecipe func(name string) ([]byte, error)) Resolved 
 		// hash, so the audit proves exactly the policy that ran.
 		p, _, err := recipe.Compose(src, loadRecipe)
 		if err != nil {
-			res.Errors = append(res.Errors, RouteError{Tool: sp.Tool, Recipe: sp.Recipe, Err: err.Error()})
+			res.Errors = append(res.Errors, RouteError{Tool: sp.Tool, Server: sp.Server, Recipe: sp.Recipe, Err: err.Error()})
 			continue // fail closed: no entry -> tool unrouted -> gate denies
 		}
-		res.Router[sp.Tool] = proxy.Route{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: sp.GateArg, RecipeName: sp.Recipe, Server: sp.Server}
+		// Keyed by the ADVERTISED name (<server>__<tool>) — the name the agent will call. Two servers
+		// exposing the same tool therefore produce two distinct entries instead of one overwriting the
+		// other. Route.Tool keeps the downstream's own name, which is what a cleared call is forwarded as.
+		res.Router[proxy.AdvertisedName(sp.Server, sp.Tool)] = proxy.Route{
+			Recipe:     p.Recipe,
+			RecipeHash: p.SemanticHash,
+			GateArg:    sp.GateArg,
+			RecipeName: sp.Recipe,
+			Server:     sp.Server,
+			Tool:       sp.Tool,
+		}
 	}
 	return res
 }

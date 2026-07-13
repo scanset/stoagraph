@@ -15,6 +15,30 @@ The `server` is part of the binding — it names the MCP server that serves the 
 infers it from the tool name, so a route means the same thing tomorrow even after you register another
 server that happens to expose the same tool.
 
+## The agent sees `<server>__<tool>`
+
+A route is keyed by **(server, tool)**, so the same tool name can be routed on two servers at once —
+GitHub's `search_code` and a local server's `search_code` are two different tools with two different
+policies. To keep them apart, the gate advertises every routed tool to the agent under a **namespaced**
+name:
+
+```
+github__search_code        -> gated by github_search_policy, dispatched to `github`
+local-tools__search_code   -> gated by local_search_policy,  dispatched to `local-tools`
+```
+
+You still author routes with the plain tool name; the prefix is what the *agent* calls, and the gate
+forwards downstream under the server's own name (`search_code`) — the tool server never sees the prefix.
+
+Two consequences worth knowing:
+
+- **Tools are always prefixed**, even when only one server is connected. If the gate only prefixed on
+  collision, registering a second server would *rename* a tool the agent already knew, and a route that
+  worked yesterday would resolve differently today. A stable name costs one prefix.
+- **Server names are restricted** to `[a-zA-Z0-9_-]` and may not contain `__`. The name becomes half of
+  a tool name that gets handed to a model, and the provider tool-use APIs reject anything else. An
+  invalid name is refused when you register the server, not silently mangled later.
+
 ## The rule that matters: no route, no call
 
 A tool with no route is **denied**. Not forwarded, not passed through, not "allowed because nobody said

@@ -1819,6 +1819,58 @@
       "symbols": []
     },
     {
+      "doc": "",
+      "keywords": [
+        "tool",
+        "naming",
+        "namespace",
+        "advertised",
+        "server",
+        "prefix",
+        "collision",
+        "unambiguous",
+        "split",
+        "model-safe"
+      ],
+      "layer": "gate",
+      "package": "proxy",
+      "path": "stoa-kernel/stag/proxy/naming.go",
+      "symbols": [
+        {
+          "kw": [
+            "advertise",
+            "namespaced",
+            "always-prefix",
+            "stable"
+          ],
+          "line": 22,
+          "name": "AdvertisedName"
+        },
+        {
+          "kw": [
+            "split",
+            "first-separator",
+            "lossless",
+            "unambiguous"
+          ],
+          "line": 30,
+          "name": "SplitAdvertised"
+        },
+        {
+          "kw": [
+            "validate",
+            "server",
+            "name",
+            "charset",
+            "separator",
+            "fail-closed"
+          ],
+          "line": 48,
+          "name": "ValidServerName"
+        }
+      ]
+    },
+    {
       "doc": "Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agnostic decision at the tool boundary, with NO MCP dependency. An external agent proposes a tool call; the Gate routes it to a recipe, runs th",
       "keywords": [
         "gating",
@@ -1867,12 +1919,13 @@
         {
           "kw": [
             "router",
-            "tool",
+            "advertised",
             "name",
             "to",
-            "route"
+            "route",
+            "unique-per-fleet"
           ],
-          "line": 77,
+          "line": 89,
           "name": "Router"
         },
         {
@@ -1888,7 +1941,7 @@
             "satisfy",
             "this)"
           ],
-          "line": 80,
+          "line": 92,
           "name": "Sink"
         },
         {
@@ -1902,7 +1955,7 @@
             "fault",
             "approval-id"
           ],
-          "line": 85,
+          "line": 97,
           "name": "Decision"
         },
         {
@@ -1915,7 +1968,7 @@
             "approvals",
             "notify"
           ],
-          "line": 96,
+          "line": 108,
           "name": "Gate"
         },
         {
@@ -1928,7 +1981,7 @@
             "fail-closed",
             "approval-loop"
           ],
-          "line": 104,
+          "line": 116,
           "name": "Decide"
         }
       ]
@@ -2366,11 +2419,12 @@
             "route",
             "error",
             "tool",
+            "server",
             "recipe",
             "reason",
             "unresolved"
           ],
-          "line": 25,
+          "line": 28,
           "name": "RouteError"
         },
         {
@@ -2379,7 +2433,7 @@
             "router",
             "errors"
           ],
-          "line": 32,
+          "line": 36,
           "name": "Resolved"
         },
         {
@@ -2391,7 +2445,7 @@
             "parse",
             "fail-closed"
           ],
-          "line": 38,
+          "line": 42,
           "name": "Build"
         }
       ]
@@ -2459,7 +2513,7 @@
             "name",
             "schema"
           ],
-          "line": 14,
+          "line": 15,
           "name": "MCPToolView"
         },
         {
@@ -2475,7 +2529,7 @@
             "discover-error",
             "auth"
           ],
-          "line": 20,
+          "line": 21,
           "name": "MCPServerView"
         }
       ]
@@ -2593,7 +2647,7 @@
             "error",
             "resolution"
           ],
-          "line": 16,
+          "line": 17,
           "name": "RouteView"
         }
       ]
@@ -3225,9 +3279,9 @@
             "route",
             "upsert",
             "by",
-            "tool"
+            "tool+server"
           ],
-          "line": 262,
+          "line": 267,
           "name": "PutRoute"
         },
         {
@@ -3236,7 +3290,7 @@
             "routes",
             "ordered"
           ],
-          "line": 274,
+          "line": 279,
           "name": "ListRoutes"
         },
         {
@@ -3244,9 +3298,9 @@
             "delete",
             "route",
             "by",
-            "tool"
+            "tool+server"
           ],
-          "line": 292,
+          "line": 300,
           "name": "DeleteRoute"
         }
       ]

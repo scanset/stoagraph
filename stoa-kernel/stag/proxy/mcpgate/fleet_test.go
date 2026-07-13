@@ -54,16 +54,16 @@ func TestRoutePicksTheServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// route ONE tool from EACH server — each route NAMES its server
+	// route ONE tool from EACH server — each route NAMES its server, and is keyed by the ADVERTISED name
 	gate := proxy.Gate{Routes: proxy.Router{
-		"get_file_contents": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "GH"},
-		"read_file":         {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "local-tools"},
+		proxy.AdvertisedName("GH", "get_file_contents"):  {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "GH", Tool: "get_file_contents"},
+		proxy.AdvertisedName("local-tools", "read_file"): {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "local-tools", Tool: "read_file"},
 	}}
 	fleet := mcpgate.NewFleet([]mcpgate.Downstream{gh, local})
 
 	agent := connectAgent(t, ctx, mcpgate.NewGatingServer(gate, fleet, mcpgate.ReadChannel{}))
 
-	// the agent sees exactly the routed tools — one from each server, and nothing else
+	// the agent sees exactly the routed tools, under their NAMESPACED names — one from each server
 	list, err := agent.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -72,14 +72,15 @@ func TestRoutePicksTheServer(t *testing.T) {
 	for _, tl := range list.Tools {
 		got[tl.Name] = true
 	}
-	if len(list.Tools) != 2 || !got["get_file_contents"] || !got["read_file"] {
+	if len(list.Tools) != 2 || !got["GH__get_file_contents"] || !got["local-tools__read_file"] {
 		t.Fatalf("agent must be offered exactly the two routed tools, one per server; got %v", got)
 	}
 
-	// and each call reaches ITS OWN server
+	// and each call reaches ITS OWN server. The agent calls the advertised name; the DOWNSTREAM is
+	// called under its own tool name, which is why these handlers answer at all.
 	for tool, want := range map[string]string{
-		"get_file_contents": "handled by GH",
-		"read_file":         "handled by local-tools",
+		"GH__get_file_contents":  "handled by GH",
+		"local-tools__read_file": "handled by local-tools",
 	} {
 		res, cerr := agent.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: map[string]any{"text": "hello"}})
 		if cerr != nil {
@@ -94,15 +95,14 @@ func TestRoutePicksTheServer(t *testing.T) {
 	}
 }
 
-// TestRouteDelegatesWhenTwoServersShareAToolName is why the SERVER belongs in the route.
+// TestRouteDelegatesWhenTwoServersShareAToolName is why the SERVER belongs in the route, and why the
+// advertised tool surface is NAMESPACED.
 //
-// Both servers expose `search_code`. If the gate INFERRED the server from the tool name it would have to
-// either guess, or refuse the name entirely — and worse, registering the second server would silently
-// change (or break) a route that already worked against the first. That is a policy quietly changing
-// because you added a server, which is exactly what this product exists to prevent.
-//
-// Because the route names its server, there is nothing to infer: the route means the same thing today
-// and tomorrow, and a shared tool name is simply not a problem.
+// Both servers expose `search_code`, and BOTH are routed AT THE SAME TIME. This is the case the gate
+// used to be unable to express: the router was keyed by tool name, so the second route overwrote the
+// first and silently repointed it at the other server — a policy quietly changing because you added a
+// server, which is exactly what this product exists to prevent. Keying on <server>__<tool> makes the
+// two distinct tools, each bound to its own recipe and each dispatched where its route says.
 func TestRouteDelegatesWhenTwoServersShareAToolName(t *testing.T) {
 	ctx := context.Background()
 	alpha := server(t, ctx, "alpha", "search_code")
@@ -111,32 +111,41 @@ func TestRouteDelegatesWhenTwoServersShareAToolName(t *testing.T) {
 
 	p, _ := recipe.Parse([]byte(policySrc))
 
-	// the SAME tool name, routed explicitly to beta
+	// the SAME tool name on BOTH servers, both routed — the thing the old key made impossible
 	gate := proxy.Gate{Routes: proxy.Router{
-		"search_code": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "beta"},
+		proxy.AdvertisedName("alpha", "search_code"): {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "alpha", Tool: "search_code"},
+		proxy.AdvertisedName("beta", "search_code"):  {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "beta", Tool: "search_code"},
 	}}
 	agent := connectAgent(t, ctx, mcpgate.NewGatingServer(gate, fleet, mcpgate.ReadChannel{}))
 
-	res, err := agent.CallTool(ctx, &mcp.CallToolParams{Name: "search_code", Arguments: map[string]any{"text": "hello"}})
+	// the agent is offered BOTH, told apart by their server prefix
+	list, err := agent.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.IsError {
-		t.Fatalf("a route naming its server must dispatch, got: %s", textOf(t, res))
+	got := map[string]bool{}
+	for _, tl := range list.Tools {
+		got[tl.Name] = true
 	}
-	if got := textOf(t, res); got != "handled by beta" {
-		t.Fatalf("the route said beta; the call went to %q", got)
+	if len(list.Tools) != 2 || !got["alpha__search_code"] || !got["beta__search_code"] {
+		t.Fatalf("both servers' search_code must be offered, told apart by prefix; got %v", got)
 	}
 
-	// and pointing the same name at alpha sends it to alpha — no ambiguity, because nothing is inferred
-	gate.Routes["search_code"] = proxy.Route{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "alpha"}
-	agent2 := connectAgent(t, ctx, mcpgate.NewGatingServer(gate, fleet, mcpgate.ReadChannel{}))
-	res2, err := agent2.CallTool(ctx, &mcp.CallToolParams{Name: "search_code", Arguments: map[string]any{"text": "hello"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := textOf(t, res2); got != "handled by alpha" {
-		t.Fatalf("the route said alpha; the call went to %q", got)
+	// and each one dispatches to ITS OWN server — neither route repointed the other
+	for tool, want := range map[string]string{
+		"alpha__search_code": "handled by alpha",
+		"beta__search_code":  "handled by beta",
+	} {
+		res, cerr := agent.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: map[string]any{"text": "hello"}})
+		if cerr != nil {
+			t.Fatalf("%s: %v", tool, cerr)
+		}
+		if res.IsError {
+			t.Fatalf("%s was refused: %s", tool, textOf(t, res))
+		}
+		if got := textOf(t, res); got != want {
+			t.Fatalf("%s went to the WRONG server: got %q, want %q", tool, got, want)
+		}
 	}
 }
 
@@ -148,10 +157,10 @@ func TestRouteToAnUnknownServerIsNotServed(t *testing.T) {
 	p, _ := recipe.Parse([]byte(policySrc))
 
 	for _, rt := range []proxy.Route{
-		{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "ghost"}, // no such server
-		{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "alpha"}, // server exists, tool does not
+		{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "ghost", Tool: "not_there"}, // no such server
+		{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "alpha", Tool: "not_there"}, // server exists, tool does not
 	} {
-		gate := proxy.Gate{Routes: proxy.Router{"not_there": rt}}
+		gate := proxy.Gate{Routes: proxy.Router{proxy.AdvertisedName(rt.Server, rt.Tool): rt}}
 		agent := connectAgent(t, ctx, mcpgate.NewGatingServer(gate, fleet, mcpgate.ReadChannel{}))
 		list, err := agent.ListTools(ctx, nil)
 		if err != nil {

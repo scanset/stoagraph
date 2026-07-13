@@ -91,15 +91,45 @@ func TestProviderAndRouteCRUD(t *testing.T) {
 	if err := s.PutRoute(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-	// same tool, different recipe -> replaced (one route per tool)
+	// same (tool, server), different recipe -> replaced. The KEY is the pair, so re-routing a tool on
+	// the server it is already bound to updates that binding rather than adding a second one.
 	if err := s.PutRoute(ctx, store.Route{Tool: "write_note", Server: "downstream", Recipe: "other", GateArg: "text"}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := s.ListRoutes(ctx)
 	if len(list) != 1 || list[0].Recipe != "other" {
-		t.Fatalf("route must be replaced: %+v", list)
+		t.Fatalf("route on the same (tool,server) must be replaced: %+v", list)
 	}
-	_ = s.DeleteRoute(ctx, "write_note")
+
+	// REGRESSION: the same tool name on a DIFFERENT server is a DIFFERENT route, and must not disturb
+	// the first. Keying the table on tool_name alone used to make this an UPSERT that silently repointed
+	// `write_note` at `other-server` — a route the operator never touched, quietly re-bound to another
+	// downstream. That is the exact surprise the gate exists to prevent, so it is pinned here.
+	if err := s.PutRoute(ctx, store.Route{Tool: "write_note", Server: "other-server", Recipe: "strict", GateArg: "text"}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = s.ListRoutes(ctx)
+	if len(list) != 2 {
+		t.Fatalf("same tool on two servers must be TWO routes, got %d: %+v", len(list), list)
+	}
+	byServer := map[string]store.Route{}
+	for _, rt := range list {
+		byServer[rt.Server] = rt
+	}
+	if got := byServer["downstream"].Recipe; got != "other" {
+		t.Errorf("routing write_note on other-server REPOINTED the downstream route: recipe = %q, want %q", got, "other")
+	}
+	if got := byServer["other-server"].Recipe; got != "strict" {
+		t.Errorf("other-server route recipe = %q, want %q", got, "strict")
+	}
+
+	// deleting one binding leaves the other alone — the tool name alone cannot say which was meant.
+	_ = s.DeleteRoute(ctx, "write_note", "other-server")
+	list, _ = s.ListRoutes(ctx)
+	if len(list) != 1 || list[0].Server != "downstream" {
+		t.Fatalf("delete must remove ONLY (write_note, other-server): %+v", list)
+	}
+	_ = s.DeleteRoute(ctx, "write_note", "downstream")
 	if list, _ := s.ListRoutes(ctx); len(list) != 0 {
 		t.Errorf("routes after delete: %+v", list)
 	}

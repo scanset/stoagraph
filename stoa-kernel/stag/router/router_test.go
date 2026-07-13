@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/recipe"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/router"
 )
@@ -45,14 +46,16 @@ func TestBuildValid(t *testing.T) {
 		"policyB": policy("policyb", "scale", "n"),
 	})
 	res := router.Build([]router.Spec{
-		{Tool: "write_note", Recipe: "policyA", GateArg: "text"},
-		{Tool: "scale", Recipe: "policyB", GateArg: "n"},
+		{Tool: "write_note", Server: "srv", Recipe: "policyA", GateArg: "text"},
+		{Tool: "scale", Server: "srv", Recipe: "policyB", GateArg: "n"},
 	}, load)
 	if len(res.Router) != 2 || len(res.Errors) != 0 {
 		t.Fatalf("want 2 routes, 0 errors: %d routes, %+v errors", len(res.Router), res.Errors)
 	}
-	if res.Router["write_note"].GateArg != "text" || res.Router["write_note"].RecipeHash == "" {
-		t.Errorf("resolved route: %+v", res.Router["write_note"])
+	// the Router is keyed by the ADVERTISED name; Route.Tool keeps the downstream's own name.
+	rt := res.Router[proxy.AdvertisedName("srv", "write_note")]
+	if rt.GateArg != "text" || rt.RecipeHash == "" || rt.Tool != "write_note" || rt.Server != "srv" {
+		t.Errorf("resolved route: %+v", rt)
 	}
 }
 
@@ -62,21 +65,21 @@ func TestBuildFailsClosed(t *testing.T) {
 		"garbage": "this: is: not: a recipe {{{",
 	})
 	res := router.Build([]router.Spec{
-		{Tool: "write_note", Recipe: "good", GateArg: "text"},
-		{Tool: "missing_tool", Recipe: "absent", GateArg: "x"}, // loader errors
-		{Tool: "bad_tool", Recipe: "garbage", GateArg: "x"},    // parse errors
+		{Tool: "write_note", Server: "srv", Recipe: "good", GateArg: "text"},
+		{Tool: "missing_tool", Server: "srv", Recipe: "absent", GateArg: "x"}, // loader errors
+		{Tool: "bad_tool", Server: "srv", Recipe: "garbage", GateArg: "x"},    // parse errors
 	}, load)
 
 	if len(res.Router) != 1 {
 		t.Fatalf("only the valid tool routes: %d", len(res.Router))
 	}
-	if _, ok := res.Router["write_note"]; !ok {
+	if _, ok := res.Router[proxy.AdvertisedName("srv", "write_note")]; !ok {
 		t.Error("valid tool must survive alongside bad ones")
 	}
-	if _, ok := res.Router["missing_tool"]; ok {
+	if _, ok := res.Router[proxy.AdvertisedName("srv", "missing_tool")]; ok {
 		t.Error("missing recipe must not route (fail closed)")
 	}
-	if _, ok := res.Router["bad_tool"]; ok {
+	if _, ok := res.Router[proxy.AdvertisedName("srv", "bad_tool")]; ok {
 		t.Error("invalid recipe must not route (fail closed)")
 	}
 	if len(res.Errors) != 2 {
@@ -95,10 +98,10 @@ func FuzzBuild(f *testing.F) {
 			}
 			return nil, fmt.Errorf("no %q", name)
 		}
-		specs := []router.Spec{{Tool: "t", Recipe: "r", GateArg: "a"}}
+		specs := []router.Spec{{Tool: "t", Server: "srv", Recipe: "r", GateArg: "a"}}
 		res := router.Build(specs, load)
 
-		_, routed := res.Router["t"]
+		_, routed := res.Router[proxy.AdvertisedName("srv", "t")]
 		errored := false
 		for _, e := range res.Errors {
 			if e.Tool == "t" {
@@ -114,8 +117,8 @@ func FuzzBuild(f *testing.F) {
 			if perr != nil {
 				t.Fatalf("routed but recipe does not parse: %v", perr)
 			}
-			if res.Router["t"].GateArg != "a" {
-				t.Fatalf("gate arg lost: %+v", res.Router["t"])
+			if rt := res.Router[proxy.AdvertisedName("srv", "t")]; rt.GateArg != "a" || rt.Tool != "t" {
+				t.Fatalf("gate arg or downstream tool name lost: %+v", rt)
 			}
 		} else if perr == nil {
 			t.Fatalf("errored but recipe parses fine")

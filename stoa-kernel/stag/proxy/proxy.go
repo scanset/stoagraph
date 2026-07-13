@@ -47,6 +47,11 @@ type Route struct {
 	// gate works out from what happens to be connected: a route must mean the same thing tomorrow, when
 	// another server that also exposes this tool name has been registered.
 	Server string
+	// Tool is the tool's name ON THE DOWNSTREAM SERVER — what gets called when a decision clears.
+	// It is NOT the Router key: the key is the ADVERTISED name (AdvertisedName(Server, Tool)), which is
+	// what the agent calls. Keeping both is what lets two servers expose the same tool name and each be
+	// routed to its own recipe.
+	Tool string
 }
 
 // Approvals is the gate-side store for the human-approval loop (Stage 5). It is OPTIONAL: a nil
@@ -73,7 +78,14 @@ type PendingNotice struct {
 	Recipe      string `json:"recipe"`
 }
 
-// kw: router tool name to route
+// Router maps an ADVERTISED tool name (<server>__<tool>, see AdvertisedName) to its route.
+//
+// The key is the advertised name and not the bare tool name, because the bare name is not unique
+// across a fleet: GitHub's server and a local one may both expose `search_code`. Keying on the tool
+// alone made the two collide — the second route silently repointed the first at a different server —
+// which is precisely the "a policy that quietly changes when you add a server" failure the gate is
+// supposed to make impossible. The advertised name is unique by construction.
+// kw: router advertised name to route unique-per-fleet
 type Router map[string]Route
 
 // kw: sink egress record release event (egress.JSONLSink / broker.MemSink satisfy this)

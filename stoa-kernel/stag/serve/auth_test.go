@@ -60,7 +60,7 @@ func TestRoleMap(t *testing.T) {
 		{"POST", "/api/recipes", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
 		{"DELETE", "/api/recipes/x", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
 		{"POST", "/api/routes", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
-		{"DELETE", "/api/routes/x", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
+		{"DELETE", "/api/routes/srv/x", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}}, // {server}/{tool}
 		{"POST", "/api/mcp-servers", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
 		{"DELETE", "/api/mcp-servers/x", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},
 		{"POST", "/api/providers", []string{toks.Admin}, []string{toks.Dispatch, toks.Approve, ""}},

@@ -86,7 +86,7 @@ func TestGatingProxyEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	gate := proxy.Gate{Routes: proxy.Router{
-		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream"},
+		proxy.AdvertisedName("downstream", "write_note"): {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream", Tool: "write_note"},
 	}}
 
 	// stag's gating MCP server, and pair B: the agent <-> that server
@@ -108,7 +108,7 @@ func TestGatingProxyEndToEnd(t *testing.T) {
 	defer agentSess.Close()
 
 	// --- ALLOWED call: cleared, forwarded, downstream ran it
-	res, err := agentSess.CallTool(ctx, &mcp.CallToolParams{Name: "write_note", Arguments: map[string]any{"text": "hello"}})
+	res, err := agentSess.CallTool(ctx, &mcp.CallToolParams{Name: "downstream__write_note", Arguments: map[string]any{"text": "hello"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestGatingProxyEndToEnd(t *testing.T) {
 	}
 
 	// --- DENIED call: blocked; downstream must NEVER see it
-	res2, err := agentSess.CallTool(ctx, &mcp.CallToolParams{Name: "write_note", Arguments: map[string]any{"text": "rm -rf /"}})
+	res2, err := agentSess.CallTool(ctx, &mcp.CallToolParams{Name: "downstream__write_note", Arguments: map[string]any{"text": "rm -rf /"}})
 	if err != nil {
 		t.Fatal(err)
 	}

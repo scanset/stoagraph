@@ -174,6 +174,14 @@ Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17
 
 **kw:** mcp · adapter · gating · proxy · server · client · forward-iff-cleared · quarantined · tool · boundary
 
+### `stoa-kernel/stag/proxy/naming.go`
+
+**kw:** tool · naming · namespace · advertised · server · prefix · collision · unambiguous · split · model-safe
+
+- `AdvertisedName` (:22) — advertise · namespaced · always-prefix · stable
+- `SplitAdvertised` (:30) — split · first-separator · lossless · unambiguous
+- `ValidServerName` (:48) — validate · server · name · charset · separator · fail-closed
+
 ### `stoa-kernel/stag/proxy/proxy.go`
 Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agnostic decision at the tool boundary, with NO MCP dependency. An external agent proposes a tool call; the Gate routes it to a recipe, runs th
 
@@ -181,11 +189,11 @@ Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agn
 
 - `ToolCall` (:35) — tool · call · name · args · from · the · untrusted · agent
 - `Route` (:41) — route · recipe · hash · gated-arg · for · a · tool
-- `Router` (:77) — router · tool · name · to · route
-- `Sink` (:80) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
-- `Decision` (:85) — decision · tool · verdict · forward · value · events · fault · approval-id
-- `Gate` (:96) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
-- `Decide` (:104) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
+- `Router` (:89) — router · advertised · name · to · route · unique-per-fleet
+- `Sink` (:92) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
+- `Decision` (:97) — decision · tool · verdict · forward · value · events · fault · approval-id
+- `Gate` (:108) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
+- `Decide` (:116) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
 
 ### `stoa-kernel/stag/proxy/sessiond/sessiond.go`
 Package sessiond is the stag-proxy v2 daemon surface: a standing HTTP server where each MCP session is bound to a dispatcher-chosen recipe (Planning/24 v2, /25). The TRUSTED dispatcher POSTs /sessions to bind a session t
@@ -238,9 +246,9 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 **kw:** route · resolve · build · proxy · router · recipe-by-name · fail-closed · multi-tool · gate · binding
 
 - `Spec` (:17) — spec · tool · recipe-name · gate-arg · (a · stored · binding)
-- `RouteError` (:25) — route · error · tool · recipe · reason · unresolved
-- `Resolved` (:32) — resolved · router · errors
-- `Build` (:38) — build · resolve · specs · load · parse · fail-closed
+- `RouteError` (:28) — route · error · tool · server · recipe · reason · unresolved
+- `Resolved` (:36) — resolved · router · errors
+- `Build` (:42) — build · resolve · specs · load · parse · fail-closed
 
 ### `stoa-kernel/stag/serve/approvals.go`
 
@@ -252,8 +260,8 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 
 **kw:** mcp · server · endpoints · add · discover · list · delete · adapters · act-channel · downstream
 
-- `MCPToolView` (:14) — mcp · tool · view · name · schema
-- `MCPServerView` (:20) — mcp · server · view · name · transport · target · enabled · tools · discover-error · auth
+- `MCPToolView` (:15) — mcp · tool · view · name · schema
+- `MCPServerView` (:21) — mcp · server · view · name · transport · target · enabled · tools · discover-error · auth
 
 ### `stoa-kernel/stag/serve/oauth.go`
 
@@ -275,7 +283,7 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 
 **kw:** route · endpoints · tool · recipe · binding · list · put · delete · resolution · status · multi-tool
 
-- `RouteView` (:16) — route · view · tool · recipe · gatearg · valid · error · resolution
+- `RouteView` (:17) — route · view · tool · recipe · gatearg · valid · error · resolution
 
 ### `stoa-kernel/stag/serve/serve.go`
 Package serve is the HTTP operator surface over the gating proxy (Planning/16): the backend the Next.js console talks to. It wraps a proxy.Gate in a thin, fail-closed JSON HTTP layer — POST /api/decide gates a submitted 
@@ -343,9 +351,9 @@ Package store is the SQLite config store for the admin console's Adapters (Plann
 - `PutProvider` (:224) — put · provider · upsert
 - `ListProviders` (:236) — list · providers · ordered
 - `DeleteProvider` (:256) — delete · provider
-- `PutRoute` (:262) — put · route · upsert · by · tool
-- `ListRoutes` (:274) — list · routes · ordered
-- `DeleteRoute` (:292) — delete · route · by · tool
+- `PutRoute` (:267) — put · route · upsert · by · tool+server
+- `ListRoutes` (:279) — list · routes · ordered
+- `DeleteRoute` (:300) — delete · route · by · tool+server
 
 ## orchestrator
 

@@ -479,7 +479,8 @@ function Routes({
         <Empty>No routes. Bind a tool to a recipe to gate it.</Empty>
       ) : (
         routes.map((r) => (
-          <div key={r.tool} className="flex items-center justify-between border-t border-[var(--border)] px-5 py-2.5 first:border-t-0">
+          // keyed by (server, tool): the same tool name on two servers is two distinct routes
+          <div key={`${r.server} ${r.tool}`} className="flex items-center justify-between border-t border-[var(--border)] px-5 py-2.5 first:border-t-0">
             <div className="flex min-w-0 items-center gap-2">
                 {/* the server is part of the binding — a route reads as "where + what" */}
                 <span className="rounded bg-[var(--panel-3)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted)]">
@@ -492,7 +493,7 @@ function Routes({
               <span className="font-mono text-[11px] text-[var(--faint)]">({r.gateArg})</span>
               {!r.valid && <span className="text-[11px] text-[var(--deny)]">unresolved</span>}
             </div>
-            <Del onClick={() => wrap(() => deleteRoute(r.tool))} />
+            <Del onClick={() => wrap(() => deleteRoute(r.server, r.tool))} />
           </div>
         ))
       )}

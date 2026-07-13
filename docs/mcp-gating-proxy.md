@@ -92,10 +92,16 @@ gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
 - **Scalar gated arguments.** A recipe gates named arguments (e.g. `namespace`, `replicas`), compared
   as strings; non-scalar arguments are stringified. Which arguments a tool's policy judges is set by its
   route — see [routes.md](routes.md).
-- **Multi-server fleet.** The gate fronts several MCP servers at once. A route names its `server` (a
-  route is tool → server → recipe → gateArg); the gate connects every enabled downstream and dispatches a
-  cleared call to the named one. It never infers the server from the tool name, so registering another
-  server that happens to expose the same tool name cannot silently re-point a route you already wrote.
+- **Multi-server fleet, namespaced tool surface.** The gate fronts several MCP servers at once. A route
+  names its `server` (a route is tool → server → recipe → gateArg) and is keyed by **(server, tool)**, so
+  two servers may both expose `search_code` and both be routed, each to its own recipe. The gate
+  advertises them apart, as `<server>__<tool>` — `github__search_code`, `local-tools__search_code` — and
+  forwards a cleared call downstream under the server's own name, so the tool server never sees the
+  prefix. Tools are prefixed **always**, even with one server connected: prefixing only on collision
+  would rename a tool the agent already knew the moment you registered a second server. The gate never
+  infers the server from a tool name, so adding a server cannot silently re-point a route you already
+  wrote. Server names are therefore restricted to `[a-zA-Z0-9_-]` with no `__` (the advertised name is
+  handed to a model, and the provider tool-use APIs reject anything else).
 - **`http` context providers.** The `rag` and `mcp_resource` provider kinds are reserved and fail closed
   (an unbuildable provider is dropped from the session, never fabricated). Keeping retrieval in a
   *downstream* provider is deliberate: it is what lets the gate stay model-free.

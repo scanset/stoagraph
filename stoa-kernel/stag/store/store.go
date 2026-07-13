@@ -258,11 +258,16 @@ func (s *Store) DeleteProvider(ctx context.Context, name string) error {
 	return err
 }
 
-// kw: put route upsert by tool
+// PutRoute upserts a route keyed by (tool, server).
+//
+// The conflict target is the PAIR. Re-routing `search_code` on `github` updates that binding and
+// leaves `search_code` on `local` untouched — where a tool-only conflict target used to overwrite
+// server_name and silently move a route the operator never touched.
+// kw: put route upsert by tool+server
 func (s *Store) PutRoute(ctx context.Context, r Route) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO route(tool_name,server_name,recipe_name,gate_arg) VALUES(?,?,?,?)
-		 ON CONFLICT(tool_name) DO UPDATE SET server_name=excluded.server_name,recipe_name=excluded.recipe_name,gate_arg=excluded.gate_arg`,
+		 ON CONFLICT(tool_name,server_name) DO UPDATE SET recipe_name=excluded.recipe_name,gate_arg=excluded.gate_arg`,
 		r.Tool, r.Server, r.Recipe, r.GateArg)
 	if err != nil {
 		return fmt.Errorf("store: put route: %w", err)
@@ -272,7 +277,7 @@ func (s *Store) PutRoute(ctx context.Context, r Route) error {
 
 // kw: list routes ordered
 func (s *Store) ListRoutes(ctx context.Context) ([]Route, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT tool_name,server_name,recipe_name,gate_arg FROM route ORDER BY tool_name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT tool_name,server_name,recipe_name,gate_arg FROM route ORDER BY server_name,tool_name`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list routes: %w", err)
 	}
@@ -288,8 +293,11 @@ func (s *Store) ListRoutes(ctx context.Context) ([]Route, error) {
 	return out, rows.Err()
 }
 
-// kw: delete route by tool
-func (s *Store) DeleteRoute(ctx context.Context, tool string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM route WHERE tool_name=?`, tool)
+// DeleteRoute removes ONE binding, named by both halves of its key. Deleting `search_code` on
+// `github` must not disturb `search_code` on `local`, so the tool name alone is not enough to say
+// which route the operator meant.
+// kw: delete route by tool+server
+func (s *Store) DeleteRoute(ctx context.Context, tool, server string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM route WHERE tool_name=? AND server_name=?`, tool, server)
 	return err
 }

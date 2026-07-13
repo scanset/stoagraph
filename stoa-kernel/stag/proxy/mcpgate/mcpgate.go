@@ -42,18 +42,25 @@ type ReadChannel struct {
 func NewGatingServer(gate proxy.Gate, fleet Fleet, read ReadChannel) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "stag", Version: "0.1"}, nil)
 	s.AddReceivingMiddleware(recordUnrouted(gate))
-	// The ROUTE DELEGATES. Each route names its server, so a cleared call is dispatched to the server
-	// the operator bound it to — not to whichever connected downstream happens to expose that name. Two
-	// servers may both expose `search_code`; each route says which one it means.
-	for name, rt := range gate.Routes {
-		d, decl, err := fleet.Lookup(rt.Server, name)
+	// The ROUTE DELEGATES, and the advertised NAME carries the delegation.
+	//
+	// Each tool is offered to the agent as <server>__<tool>, so two servers that both expose
+	// `search_code` become two distinct tools (`github__search_code`, `local__search_code`), each bound
+	// to its own recipe and each dispatched to the server the operator named. The agent picks one by
+	// name; the gate never has to guess which downstream was meant.
+	for adv, rt := range gate.Routes {
+		d, decl, err := fleet.Lookup(rt.Server, rt.Tool)
 		if err != nil {
 			// The route names a server that is not connected, or that does not expose this tool. Not
 			// advertised => the middleware refuses and RECORDS any call. Bind rejects it up front with the
 			// reason; this is the belt.
 			continue
 		}
-		s.AddTool(decl, gatingHandler(gate, d.Session))
+		// Advertise under the namespaced name. Copy the declaration rather than renaming it in place:
+		// the fleet's *mcp.Tool is shared, and mutating it would rename the tool for every other reader.
+		ad := *decl
+		ad.Name = adv
+		s.AddTool(&ad, gatingHandler(gate, d.Session, rt.Tool))
 	}
 	for _, p := range read.Providers {
 		s.AddResourceTemplate(contextTemplate(p.Name()), contextHandler(p, read.Record))
@@ -173,18 +180,23 @@ func contextFrame(it provider.ContextItem) string {
 }
 
 // gatingHandler turns one tools/call into a gate decision, then forwards or refuses.
-func gatingHandler(gate proxy.Gate, downstream *mcp.ClientSession) mcp.ToolHandler {
+//
+// downstreamTool is the tool's name ON THE SERVER, which is NOT the name the agent called: the agent
+// calls the advertised `<server>__<tool>`, and the downstream has never heard of that. The gate
+// decides on what the agent asked for and forwards what the server understands.
+func gatingHandler(gate proxy.Gate, downstream *mcp.ClientSession, downstreamTool string) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// req.Params.Name is the ADVERTISED name — the Router key, and what the audit records.
 		call := proxy.ToolCall{Tool: req.Params.Name, Args: decodeArgs(req.Params.Arguments)}
 		dec := gate.Decide(ctx, call)
 		if !dec.Forward {
 			// a tool-level error the agent sees; the downstream server is never called.
 			return refusal(dec), nil
 		}
-		// cleared: forward the ORIGINAL raw arguments downstream to preserve fidelity, minus the
-		// gate-only approval_token meta arg (Stage 5) — it authorizes the release, it is not a
-		// real tool argument, and it must not leak into the downstream call or its logs.
-		return downstream.CallTool(ctx, &mcp.CallToolParams{Name: call.Tool, Arguments: stripMeta(req.Params.Arguments)})
+		// cleared: forward under the DOWNSTREAM's own tool name, with the ORIGINAL raw arguments to
+		// preserve fidelity, minus the gate-only approval_token meta arg (Stage 5) — it authorizes the
+		// release, it is not a real tool argument, and it must not leak into the downstream call or its logs.
+		return downstream.CallTool(ctx, &mcp.CallToolParams{Name: downstreamTool, Arguments: stripMeta(req.Params.Arguments)})
 	}
 }
 

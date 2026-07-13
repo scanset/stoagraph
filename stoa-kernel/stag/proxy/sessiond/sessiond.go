@@ -66,16 +66,19 @@ func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvi
 	// so a route the gate cannot actually dispatch is rejected WITH ITS REASON rather than binding
 	// cleanly and failing at call time. The gate never guesses a server from a tool name — a route must
 	// mean the same thing tomorrow, when another server exposing that name has been registered.
-	for tool, rt := range resolved.Router {
+	// adv is the ADVERTISED name (<server>__<tool>) — the Router key. rt.Tool is the tool's name on the
+	// downstream, which is what the fleet knows it by; looking it up under the advertised name would ask
+	// the server for a tool it has never heard of.
+	for adv, rt := range resolved.Router {
 		if rt.Server == "" {
-			delete(resolved.Router, tool)
-			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: tool,
+			delete(resolved.Router, adv)
+			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: rt.Tool, Server: rt.Server,
 				Err: "route names no MCP server — set `server` so the gate knows where to dispatch it"})
 			continue
 		}
-		if _, _, err := fleet.Lookup(rt.Server, tool); err != nil {
-			delete(resolved.Router, tool) // fail closed: undispatchable => ungoverned => not served
-			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: tool, Err: err.Error()})
+		if _, _, err := fleet.Lookup(rt.Server, rt.Tool); err != nil {
+			delete(resolved.Router, adv) // fail closed: undispatchable => ungoverned => not served
+			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: rt.Tool, Server: rt.Server, Err: err.Error()})
 		}
 	}
 

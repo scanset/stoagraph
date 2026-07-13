@@ -117,13 +117,14 @@ func TestSessionRecipeBinding(t *testing.T) {
 		t.Fatal("session tokens must be distinct")
 	}
 
+	// The agent calls the ADVERTISED name (<server>__<tool>); the dispatcher bound it as (tool, server).
 	// session A (allow_dev): scale dev -> ALLOW -> forwards to downstream
-	if out, isErr := callViaSession(t, ctx, ts.URL, tokA, "scale_deployment", map[string]any{"namespace": "dev"}); isErr || !strings.Contains(out, "scaled by downstream") {
+	if out, isErr := callViaSession(t, ctx, ts.URL, tokA, "downstream__scale_deployment", map[string]any{"namespace": "dev"}); isErr || !strings.Contains(out, "scaled by downstream") {
 		t.Fatalf("session A (allow_dev) dev: want forward, got isErr=%v %q", isErr, out)
 	}
 
 	// session B (only_prod): the SAME call -> DENY (dev not in {prod}) -> gate error, not forwarded
-	if out, _ := callViaSession(t, ctx, ts.URL, tokB, "scale_deployment", map[string]any{"namespace": "dev"}); strings.Contains(out, "scaled by downstream") || !strings.Contains(out, "stag gate") {
+	if out, _ := callViaSession(t, ctx, ts.URL, tokB, "downstream__scale_deployment", map[string]any{"namespace": "dev"}); strings.Contains(out, "scaled by downstream") || !strings.Contains(out, "stag gate") {
 		t.Fatalf("session B (only_prod) dev: want gate deny (no forward), got %q", out)
 	}
 

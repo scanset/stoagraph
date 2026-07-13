@@ -42,11 +42,17 @@ CREATE TABLE IF NOT EXISTS context_provider (
 -- never INFER which downstream a tool belongs to: inference means that registering an unrelated MCP
 -- server could change (or invalidate) a route you already wrote, and "the policy quietly changed when
 -- I added a server" is precisely the class of surprise this product exists to eliminate.
+-- The key is (tool_name, server_name), NOT tool_name alone. A bare tool name is not unique across a
+-- fleet — GitHub's server and a local one may both expose `search_code` — so keying on it made the
+-- two collide: the second route UPSERTED over the first and silently repointed it at another server,
+-- which is the very failure the paragraph above says must never happen. Each (server, tool) pair now
+-- carries its own recipe, and the gate advertises them apart as <server>__<tool>.
 CREATE TABLE IF NOT EXISTS route (
-  tool_name    TEXT PRIMARY KEY,
+  tool_name    TEXT NOT NULL,
   server_name  TEXT NOT NULL,   -- the MCP server this tool is dispatched to
   recipe_name  TEXT NOT NULL,
-  gate_arg     TEXT NOT NULL
+  gate_arg     TEXT NOT NULL,
+  PRIMARY KEY (tool_name, server_name)
 );
 
 -- Human-approval queue for ESCALATED actions (Stage 5). When the gate escalates a
