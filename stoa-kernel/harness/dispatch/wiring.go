@@ -10,11 +10,21 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	// The orchestrator may depend on the gate (harness -> stag); never the reverse. This is for the
+	// advertised-name convention only, so the separator has ONE definition on both sides of the wire.
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 )
 
-// RouteSpec is one tool→recipe→gateArg binding — what a session is built from.
+// RouteSpec is one tool→server→recipe→gateArg binding — what a session is built from.
+//
+// SERVER IS REQUIRED. The daemon rejects a binding whose route names no server ("route names no MCP
+// server"), because the gate never infers which downstream a tool belongs to. Dropping it here meant
+// every dispatcher-bound session was refused with "no valid routes in binding" — the orchestrator's
+// whole agent path. It is carried end to end: /api/routes -> RouteSpec -> POST /sessions.
 type RouteSpec struct {
 	Tool    string `json:"tool"`
+	Server  string `json:"server"`
 	Recipe  string `json:"recipe"`
 	GateArg string `json:"gateArg"`
 }
@@ -73,19 +83,14 @@ func (c StagClient) Catalog() ([]Recipe, error) {
 // RoutesForRecipe returns the route bindings a recipe governs (the session's routes). A recipe with
 // no route is not actionable — the session would have nothing to gate (fail closed at bind).
 func (c StagClient) RoutesForRecipe(recipe string) ([]RouteSpec, error) {
-	var routes []struct {
-		Tool    string `json:"tool"`
-		Recipe  string `json:"recipe"`
-		GateArg string `json:"gateArg"`
-		Valid   bool   `json:"valid"`
-	}
-	if err := c.get("/api/routes", &routes); err != nil {
+	routes, err := c.routes()
+	if err != nil {
 		return nil, err
 	}
 	out := make([]RouteSpec, 0, 1)
 	for _, r := range routes {
 		if r.Recipe == recipe && r.Valid {
-			out = append(out, RouteSpec{Tool: r.Tool, Recipe: r.Recipe, GateArg: r.GateArg})
+			out = append(out, RouteSpec{Tool: r.Tool, Server: r.Server, Recipe: r.Recipe, GateArg: r.GateArg})
 		}
 	}
 	return out, nil
@@ -93,27 +98,53 @@ func (c StagClient) RoutesForRecipe(recipe string) ([]RouteSpec, error) {
 
 // RoutesForTools returns the route bindings for a SET of tools (a multi-tool session profile). Each
 // tool keeps its own recipe; a tool with no valid route is silently skipped (fail closed at the gate).
+//
+// A wanted tool may be named two ways:
+//
+//	"search_code"               every routed server exposing that tool (each with its OWN recipe)
+//	"github__search_code"       exactly that server's binding — the unambiguous form
+//
+// Prefer the qualified form once more than one server is registered. A bare name is convenient, but it
+// means the session's toolset WIDENS the day you route that tool on a second server, and a toolset that
+// grows because you registered something elsewhere is the kind of quiet change this gate exists to
+// avoid. Nothing is ungoverned either way — every bound route still carries its own recipe.
 func (c StagClient) RoutesForTools(tools []string) ([]RouteSpec, error) {
 	want := make(map[string]bool, len(tools))
 	for _, t := range tools {
 		want[t] = true
 	}
-	var routes []struct {
-		Tool    string `json:"tool"`
-		Recipe  string `json:"recipe"`
-		GateArg string `json:"gateArg"`
-		Valid   bool   `json:"valid"`
-	}
-	if err := c.get("/api/routes", &routes); err != nil {
+	routes, err := c.routes()
+	if err != nil {
 		return nil, err
 	}
 	out := make([]RouteSpec, 0, len(tools))
 	for _, r := range routes {
-		if want[r.Tool] && r.Valid {
-			out = append(out, RouteSpec{Tool: r.Tool, Recipe: r.Recipe, GateArg: r.GateArg})
+		if !r.Valid {
+			continue
+		}
+		if want[r.Tool] || want[proxy.AdvertisedName(r.Server, r.Tool)] {
+			out = append(out, RouteSpec{Tool: r.Tool, Server: r.Server, Recipe: r.Recipe, GateArg: r.GateArg})
 		}
 	}
 	return out, nil
+}
+
+// routeRow is one row of GET /api/routes. `server` is part of the binding and must be carried through
+// to the session — the daemon refuses a route that does not name one.
+type routeRow struct {
+	Tool    string `json:"tool"`
+	Server  string `json:"server"`
+	Recipe  string `json:"recipe"`
+	GateArg string `json:"gateArg"`
+	Valid   bool   `json:"valid"`
+}
+
+func (c StagClient) routes() ([]routeRow, error) {
+	var routes []routeRow
+	if err := c.get("/api/routes", &routes); err != nil {
+		return nil, err
+	}
+	return routes, nil
 }
 
 // ProvidersFor resolves a set of context-provider NAMES to their specs (the READ-channel binding,
