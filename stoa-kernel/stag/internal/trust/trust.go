@@ -2,7 +2,7 @@ package trust
 
 import "errors"
 
-// file-kw: trust lattice information flow semilattice
+// file-kw: trust class ordered levels origin label information flow
 
 // kw: represent trust levels
 type TrustClass int
@@ -40,26 +40,4 @@ func ParseTrustClass(s string) (TrustClass, error) {
 	default:
 		return 0, errors.New("invalid trust class string")
 	}
-}
-
-// kw: join two trust classes
-func Join(a, b TrustClass) TrustClass {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// kw: join multiple trust classes
-func JoinAll(classes ...TrustClass) TrustClass {
-	if len(classes) == 0 {
-		return Authoritative
-	}
-	min := classes[0]
-	for _, c := range classes {
-		if c < min {
-			min = c
-		}
-	}
-	return min
 }

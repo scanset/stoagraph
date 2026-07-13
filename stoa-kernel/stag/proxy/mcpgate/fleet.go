@@ -66,9 +66,6 @@ func (f Fleet) Lookup(server, tool string) (Downstream, *mcp.Tool, error) {
 	return d, t, nil
 }
 
-// Has reports whether a server is connected.
-func (f Fleet) Has(server string) bool { _, ok := f.byName[server]; return ok }
-
 // Servers names the connected downstreams.
 func (f Fleet) Servers() []string {
 	out := make([]string, 0, len(f.byName))

@@ -262,40 +262,6 @@ func awaitFleet(ctx context.Context, st *store.Store, oauthStore oauth.Store, on
 	}
 }
 
-// awaitDownstream blocks until a downstream MCP server is registered AND reachable, then connects.
-// Used by the stdio path, which fronts exactly one server by design (one agent, one host).
-func awaitDownstream(ctx context.Context, st *store.Store, oauthStore oauth.Store, name string) (store.MCPServer, *mcp.ClientSession, []*mcp.Tool) {
-	const retry = 5 * time.Second
-	for attempt := 0; ; attempt++ {
-		srv, err := pickDownstream(ctx, st, name)
-		if err != nil {
-			if attempt == 0 {
-				log.Printf("no downstream MCP server registered yet — waiting. Register one in the console (Adapters), or run an example's setup.sh. Retrying every %s.", retry)
-			}
-			time.Sleep(retry)
-			continue
-		}
-		// Resolve the credential (oauth -> fresh bearer). An oauth server registered but not yet signed
-		// in returns an error here, so the daemon simply WAITS — fail-closed — until the operator
-		// completes sign-in from the console, then picks it up on the next attempt without a restart.
-		dauth, aerr := adapterauth.Resolve(ctx, oauthStore, nil, srv)
-		if aerr != nil {
-			if attempt == 0 {
-				log.Printf("downstream %q not ready: %v — retrying every %s", srv.Name, aerr, retry)
-			}
-			time.Sleep(retry)
-			continue
-		}
-		session, tools, cerr := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
-		if cerr != nil {
-			log.Printf("downstream %q (%s: %s) unreachable: %v — retrying in %s", srv.Name, srv.Transport, srv.Target, cerr, retry)
-			time.Sleep(retry)
-			continue
-		}
-		return srv, session, tools
-	}
-}
-
 // pickDownstream returns the named mcp_server, or the first enabled one if unnamed.
 func pickDownstream(ctx context.Context, st *store.Store, name string) (store.MCPServer, error) {
 	if name != "" {

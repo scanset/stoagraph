@@ -2,7 +2,7 @@ package gate
 
 import "fmt"
 
-// file-kw: verdict decision rollup conjunction disjunction negation gate fail-safe
+// file-kw: verdict decision rollup conjunction gate fail-safe
 
 // kw: verdict type gate decision rollup
 type Verdict int
@@ -50,40 +50,11 @@ func And(a, b Verdict) Verdict {
 	return b
 }
 
-// kw: verdict or disjunction min restrictive
-func Or(a, b Verdict) Verdict {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// kw: verdict negate involution
-func Negate(v Verdict) Verdict {
-	switch v {
-	case Allow:
-		return Deny
-	case Deny:
-		return Allow
-	default:
-		return v
-	}
-}
-
 // kw: verdict andall fold identity allow
 func AndAll(vs ...Verdict) Verdict {
 	result := Allow
 	for _, v := range vs {
 		result = And(result, v)
-	}
-	return result
-}
-
-// kw: verdict orall fold identity deny
-func OrAll(vs ...Verdict) Verdict {
-	result := Deny
-	for _, v := range vs {
-		result = Or(result, v)
 	}
 	return result
 }
