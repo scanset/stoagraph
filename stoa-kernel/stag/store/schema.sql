@@ -37,8 +37,14 @@ CREATE TABLE IF NOT EXISTS context_provider (
 
 -- The tool -> recipe bindings: one recipe governs one tool. The live gate builds
 -- its router from these rows (recipe_name resolves to a recipestore recipe).
+-- A route DELEGATES: it names the tool, the SERVER that serves it, the recipe that governs it, and
+-- which argument(s) that recipe judges. The server is part of the binding on purpose. The gate must
+-- never INFER which downstream a tool belongs to: inference means that registering an unrelated MCP
+-- server could change (or invalidate) a route you already wrote, and "the policy quietly changed when
+-- I added a server" is precisely the class of surprise this product exists to eliminate.
 CREATE TABLE IF NOT EXISTS route (
   tool_name    TEXT PRIMARY KEY,
+  server_name  TEXT NOT NULL,   -- the MCP server this tool is dispatched to
   recipe_name  TEXT NOT NULL,
   gate_arg     TEXT NOT NULL
 );

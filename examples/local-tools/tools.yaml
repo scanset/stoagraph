@@ -1,0 +1,70 @@
+# The LOCAL TOOL SURFACE. Every command here is authored by YOU. The model never chooses a command —
+# it only fills the declared {placeholder} arguments, and argv goes to the OS directly, so a value can
+# never become a second command.
+#
+#   stag-tools -config tools.yaml              # stdio: a local agent or a host-run gate spawns it
+#   stag-tools -config tools.yaml -http :9300  # http:  its own container; the gate proxies it
+#
+# Then route each tool to a recipe (see recipes/) so the gate constrains the VALUES too.
+
+root: .          # tools run here
+timeout: 20s     # default; a tool may override
+
+# A local tool gets PATH/HOME and NOTHING else. Name here anything a command genuinely needs — but
+# never the gate's own secrets: this server can be a child of the gate, and a tool that could read
+# STAG_DISPATCH_TOKEN could bind itself a session to any recipe in the system.
+env_allow: []
+
+tools:
+  - name: search_code
+    description: Search the workspace for a regex pattern. Returns matching lines with file:line.
+    command: [grep, -rn, --binary-files=without-match, "{pattern}", "{path}"]
+    args:
+      pattern:
+        description: the regex to search for
+      path:
+        description: the directory or file to search under
+    timeout: 15s
+
+  - name: read_file
+    description: Read a file from the workspace.
+    command: [cat, "{path}"]
+    args:
+      path:
+        description: the file to read
+
+  - name: list_dir
+    description: List the contents of a directory.
+    command: [ls, -la, "{path}"]
+    args:
+      path:
+        description: the directory to list
+
+  - name: git_log
+    description: Show recent commits touching a path.
+    command: [git, log, --oneline, -n, "20", "--", "{path}"]
+    args:
+      path:
+        description: the path to show history for
+
+  # A script tool: declared args are passed positionally, each as its OWN argv element, so a value with
+  # spaces or semicolons is still exactly one argument to the script.
+  - name: run_checks
+    description: Run the project's check suite.
+    script: ./scripts/check.sh
+    args: {}
+    timeout: 120s
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# WHAT YOU WILL NOT FIND HERE, AND WHY
+#
+#   - name: run_command
+#     command: [bash, -c, "{cmd}"]     # <- stag-tools REFUSES to load this
+#
+# It will not start. A shell with a placeholder in its script argument hands the model a shell through
+# the back door: the value would be PARSED as a program, and no recipe can meaningfully constrain an
+# arbitrary shell string. `set_membership` over the set of all possible shell commands is not a policy.
+#
+# The granularity of the tool is the granularity of the control. If a capability is worth having, give
+# it its own tool with the risky value as a named argument — then gate that argument.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────

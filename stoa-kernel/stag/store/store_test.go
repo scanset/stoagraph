@@ -87,12 +87,12 @@ func TestProviderAndRouteCRUD(t *testing.T) {
 		t.Errorf("providers after delete: %+v", list)
 	}
 
-	r := store.Route{Tool: "write_note", Recipe: "write_note_policy", GateArg: "text"}
+	r := store.Route{Tool: "write_note", Server: "downstream", Recipe: "write_note_policy", GateArg: "text"}
 	if err := s.PutRoute(ctx, r); err != nil {
 		t.Fatal(err)
 	}
 	// same tool, different recipe -> replaced (one route per tool)
-	if err := s.PutRoute(ctx, store.Route{Tool: "write_note", Recipe: "other", GateArg: "text"}); err != nil {
+	if err := s.PutRoute(ctx, store.Route{Tool: "write_note", Server: "downstream", Recipe: "other", GateArg: "text"}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := s.ListRoutes(ctx)
@@ -116,7 +116,7 @@ func TestAbsentFailsClosed(t *testing.T) {
 		t.Errorf("absent server must be zero, got %+v", got)
 	}
 	_ = s.Close()
-	if err := s.PutRoute(ctx, store.Route{Tool: "x", Recipe: "y", GateArg: "z"}); err == nil {
+	if err := s.PutRoute(ctx, store.Route{Tool: "x", Server: "s", Recipe: "y", GateArg: "z"}); err == nil {
 		t.Error("op after Close must error")
 	}
 }

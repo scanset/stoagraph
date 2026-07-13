@@ -4,7 +4,7 @@
 #   stag-serve  :8080   the GATE — policy, approvals, audit. No model. No keys.
 #   stag-proxy  :8091   the GATE — MCP gating proxy; sessions bound to a recipe.
 #   kbserve     :8095   example context provider (the READ channel's downstream).
-#   harness-serve :8090 the ORCHESTRATOR — models (KEYS live here), dispatch.
+#   harness-serve :8092 the ORCHESTRATOR — models (KEYS live here), dispatch.
 #   console     :3000   the one console, talking to both backends.
 #
 # Order matters: stag-serve GENERATES data/control.tokens on first start, and everything else only
@@ -38,8 +38,8 @@ if [ ! -f config/models.json ]; then
   echo "  ! config/models.json missing — copy config/models.example.json and add a key."
   echo "    (the GATE needs none of this; only the orchestrator does)"
 fi
-"$BIN/harness-serve" -addr :8090 >logs/harness-serve.log 2>&1 &
-wait_for http://localhost:8090/health "harness-serve :8090"
+"$BIN/harness-serve" -addr :8092 >logs/harness-serve.log 2>&1 &
+wait_for http://localhost:8092/health "harness-serve :8092"
 
 echo "== the CONSOLE =="
 if [ -d frontend/node_modules ]; then

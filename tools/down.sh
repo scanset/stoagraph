@@ -11,7 +11,7 @@ pkill -f 'next dev -p 3000' 2>/dev/null && echo "  stopped console" || true
 pkill -f 'examples/k8s/server.py' 2>/dev/null || true
 sleep 1
 
-for port in 8080 8091 8095 8090 3000; do
+for port in 8080 8091 8095 8092 3000; do
   if curl -sf -m 1 -o /dev/null "http://localhost:$port" 2>/dev/null; then
     echo "  ! still listening on :$port"
   fi

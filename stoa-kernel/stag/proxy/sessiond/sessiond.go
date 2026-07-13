@@ -59,8 +59,26 @@ func NewRegistry() *Registry { return &Registry{sessions: map[string]boundSessio
 // resolves) and binds it — with its READ-channel providers — under a fresh opaque token. The recipe
 // and provider choice belong to the caller (the trusted dispatcher); the untrusted agent only ever
 // receives the token.
-func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvider, loadRecipe func(string) ([]byte, error)) (string, []router.RouteError, error) {
+func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvider, loadRecipe func(string) ([]byte, error), fleet mcpgate.Fleet) (string, []router.RouteError, error) {
 	resolved := router.Build(specs, loadRecipe)
+
+	// THE ROUTE DELEGATES. Each route names the server that serves its tool; resolve it here, at bind,
+	// so a route the gate cannot actually dispatch is rejected WITH ITS REASON rather than binding
+	// cleanly and failing at call time. The gate never guesses a server from a tool name — a route must
+	// mean the same thing tomorrow, when another server exposing that name has been registered.
+	for tool, rt := range resolved.Router {
+		if rt.Server == "" {
+			delete(resolved.Router, tool)
+			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: tool,
+				Err: "route names no MCP server — set `server` so the gate knows where to dispatch it"})
+			continue
+		}
+		if _, _, err := fleet.Lookup(rt.Server, tool); err != nil {
+			delete(resolved.Router, tool) // fail closed: undispatchable => ungoverned => not served
+			resolved.Errors = append(resolved.Errors, router.RouteError{Tool: tool, Err: err.Error()})
+		}
+	}
+
 	if len(resolved.Router) == 0 {
 		return "", resolved.Errors, errors.New("no valid routes in binding")
 	}
@@ -104,8 +122,9 @@ type Deps struct {
 	Sink       proxy.Sink
 	Approvals  proxy.Approvals
 	OnEscalate func(ctx context.Context, n proxy.PendingNotice)
-	Downstream *mcp.ClientSession
-	Tools      []*mcp.Tool
+	// Fleet is EVERY connected downstream, indexed by the tool each one owns. The gate fronts several
+	// tool servers at once and the route decides which one a cleared call reaches.
+	Fleet      mcpgate.Fleet
 	LoadRecipe func(string) ([]byte, error)
 	// RecordRead audits one READ crossing (Planning/30). May be nil (recording best-effort). The
 	// READ channel is label+record, so this is the "record" half; it is separate from Sink (the
@@ -132,6 +151,7 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		var req struct {
 			Routes []struct {
 				Tool    string `json:"tool"`
+				Server  string `json:"server"` // WHICH MCP server serves it. The route delegates; the gate never infers.
 				Recipe  string `json:"recipe"`
 				GateArg string `json:"gateArg"`
 			} `json:"routes"`
@@ -145,12 +165,12 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		}
 		body, _ := io.ReadAll(r.Body)
 		if json.Unmarshal(body, &req) != nil || len(req.Routes) == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "need routes:[{tool,recipe,gateArg}]"})
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "need routes:[{tool,server,recipe,gateArg}]"})
 			return
 		}
 		specs := make([]router.Spec, 0, len(req.Routes))
 		for _, rt := range req.Routes {
-			specs = append(specs, router.Spec{Tool: rt.Tool, Recipe: rt.Recipe, GateArg: rt.GateArg})
+			specs = append(specs, router.Spec{Tool: rt.Tool, Server: rt.Server, Recipe: rt.Recipe, GateArg: rt.GateArg})
 		}
 		// Build the READ-channel providers. A provider that won't build (unsupported kind, bad config)
 		// is DROPPED from the session and logged — fail closed, never fabricate a source.
@@ -163,12 +183,21 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 			}
 			providers = append(providers, p)
 		}
-		tok, rerrs, err := reg.Create(specs, providers, deps.LoadRecipe)
+		tok, rerrs, err := reg.Create(specs, providers, deps.LoadRecipe, deps.Fleet)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error(), "routeErrors": routeErrView(rerrs)})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"token": tok, "path": "/mcp/" + tok})
+		// A PARTIAL binding must say so. Some routes can be dropped while others bind — a tool no
+		// connected server exposes, or one two servers contest — and returning a clean 200 would tell the
+		// dispatcher it got everything it asked for. It would then hand the agent a task needing a tool
+		// the agent was never given, and the failure would surface as confused model behaviour rather
+		// than as the configuration error it is.
+		out := map[string]any{"token": tok, "path": "/mcp/" + tok}
+		if len(rerrs) > 0 {
+			out["routeErrors"] = routeErrView(rerrs)
+		}
+		writeJSON(w, http.StatusOK, out)
 	}))
 
 	// One StreamableHTTPHandler serves all sessions; getServer is called once per NEW MCP session
@@ -182,7 +211,7 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		}
 		gate := proxy.Gate{Routes: bs.router, Sink: deps.Sink, Approvals: deps.Approvals, OnEscalate: deps.OnEscalate}
 		read := mcpgate.ReadChannel{Providers: bs.providers, Record: deps.RecordRead}
-		return mcpgate.NewGatingServer(gate, deps.Downstream, toolsFor(bs.router, deps.Tools), read)
+		return mcpgate.NewGatingServer(gate, deps.Fleet, read)
 	}, &mcp.StreamableHTTPOptions{SessionTimeout: sessionIdleTimeout})
 	mux.Handle("/mcp/", streamable)
 
@@ -190,18 +219,6 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sessions": reg.Count()})
 	})
 	return mux
-}
-
-// toolsFor filters the downstream tools to those the session's router governs, so the agent's
-// tools/list reflects ITS recipe — it never sees a tool its session can't use.
-func toolsFor(rt proxy.Router, all []*mcp.Tool) []*mcp.Tool {
-	out := make([]*mcp.Tool, 0, len(all))
-	for _, t := range all {
-		if _, ok := rt[t.Name]; ok {
-			out = append(out, t)
-		}
-	}
-	return out
 }
 
 func routeErrView(errs []router.RouteError) []map[string]string {

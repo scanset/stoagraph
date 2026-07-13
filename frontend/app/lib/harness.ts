@@ -2,7 +2,7 @@
 //
 // Two backends, deliberately NOT merged (Planning/26):
 //   stag-serve  :8080  the GATE — policy, approvals, records. Holds no model, no keys.
-//   harness-serve :8090  the ORCHESTRATOR — models (API KEYS), the event map, dispatch.
+//   harness-serve :8092  the ORCHESTRATOR — models (API KEYS), the event map, dispatch.
 // Only the UI unifies. Keeping the backends separate is what lets the gate stay independently
 // runnable, which is the product's whole claim.
 //
@@ -10,7 +10,7 @@
 // `operator` here. The orchestrator itself only ever holds `dispatch` — it can never approve.
 
 const HARNESS =
-  process.env.NEXT_PUBLIC_HARNESS_API || "http://localhost:8090";
+  process.env.NEXT_PUBLIC_HARNESS_API || "http://localhost:8092"; // host 8092 -> container 8090
 
 const OPERATOR_KEY = "stoagraph.operator.token";
 

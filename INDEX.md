@@ -120,22 +120,31 @@ Package notify is the OPTIONAL push side of the human-approval loop (Stage 5): a
 
 **kw:** webhook · approval · escalate · push · best-effort · async · non-blocking · notification · stage5
 
+### `stoa-kernel/stag/oauth/lock_other.go`
+
+**kw:** oauth · lock · fallback · non-unix · single-process
+
+### `stoa-kernel/stag/oauth/lock_unix.go`
+
+**kw:** oauth · cross-process · file · lock · flock · refresh · serialization · rotation
+
 ### `stoa-kernel/stag/oauth/oauth.go`
 Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE + RFC 7591 dynamic client registration + RFC 8414/9728 metadata discovery) that the gate uses to obtain and refresh access tokens for OAuth-
 
 **kw:** oauth · downstream · authorization-code · pkce · dcr · discovery · refresh · token-store · bearer
 
-- `Config` (:40) — oauth · config · endpoints · client · discovery
-- `Tokens` (:53) — oauth · tokens · access · refresh · expiry
-- `State` (:62) — oauth · state · config · tokens · persisted
-- `Store` (:75) — oauth · store · dir · load · save · file
-- `Bearer` (:112) — oauth · bearer · resolve · refresh · connect
-- `Discover` (:147) — oauth · discover · metadata · protected-resource · authorization-server · well-known
-- `Register` (:278) — oauth · register · dcr · dynamic · client
-- `PKCE` (:309) — oauth · pkce · verifier · challenge · s256
-- `AuthCodeURL` (:322) — oauth · auth-code · url · authorize · pkce · resource
-- `Exchange` (:345) — oauth · exchange · authorization-code · token
-- `Refresh` (:360) — oauth · refresh · token · grant
+- `Config` (:42) — oauth · config · endpoints · client · discovery
+- `Tokens` (:73) — oauth · tokens · access · refresh · expiry
+- `State` (:82) — oauth · state · config · tokens · persisted
+- `Store` (:95) — oauth · store · dir · load · save · file
+- `Bearer` (:147) — oauth · bearer · resolve · refresh · connect
+- `Discover` (:212) — oauth · discover · metadata · protected-resource · authorization-server · well-known
+- `Register` (:347) — oauth · register · dcr · dynamic · client
+- `PKCE` (:378) — oauth · pkce · verifier · challenge · s256
+- `AuthCodeURL` (:391) — oauth · auth-code · url · authorize · pkce · resource
+- `Exchange` (:417) — oauth · exchange · authorization-code · token
+- `Refresh` (:432) — oauth · refresh · token · grant
+- `pickTokenAuth` (:638) — token · endpoint · auth · method · basic · post · negotiate
 
 ### `stoa-kernel/stag/provider/provider.go`
 Package provider is the READ channel of the dual proxy (Planning/17/18): context providers behind one interface, with the load-bearing guarantee that ALL context is stamped untrusted at origin, unbypassably. A provider y
@@ -155,6 +164,16 @@ Package provider is the READ channel of the dual proxy (Planning/17/18): context
 
 **kw:** mcp · discover · admin · client · tools-list · downstream · stdio · http · transport · quarantined
 
+- `scrubControlPlane` (:190) — scrub · control-plane · env · stdio · subprocess · secret · leak
+
+### `stoa-kernel/stag/proxy/mcpgate/fleet.go`
+
+**kw:** fleet · downstreams · multi-server · tool · owner · route · dispatch · ambiguous · fail-closed
+
+- `Downstream` (:14) — downstream · name · session · tools
+- `Fleet` (:34) — fleet · by-name · lookup · route-declares-server · no-inference
+- `Lookup` (:57) — lookup · route · server · tool · declaration · fail-closed
+
 ### `stoa-kernel/stag/proxy/mcpgate/mcpgate.go`
 Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17, Slice 0). It wires Model Context Protocol server/client handling to the transport-agnostic proxy.Gate: stag is an MCP SERVER to the agent 
 
@@ -167,11 +186,11 @@ Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agn
 
 - `ToolCall` (:35) — tool · call · name · args · from · the · untrusted · agent
 - `Route` (:41) — route · recipe · hash · gated-arg · for · a · tool
-- `Router` (:73) — router · tool · name · to · route
-- `Sink` (:76) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
-- `Decision` (:81) — decision · tool · verdict · forward · value · events · fault · approval-id
-- `Gate` (:92) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
-- `Decide` (:100) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
+- `Router` (:77) — router · tool · name · to · route
+- `Sink` (:80) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
+- `Decision` (:85) — decision · tool · verdict · forward · value · events · fault · approval-id
+- `Gate` (:96) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
+- `Decide` (:104) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
 
 ### `stoa-kernel/stag/proxy/sessiond/sessiond.go`
 Package sessiond is the stag-proxy v2 daemon surface: a standing HTTP server where each MCP session is bound to a dispatcher-chosen recipe (Planning/24 v2, /25). The TRUSTED dispatcher POSTs /sessions to bind a session t
@@ -224,9 +243,9 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 **kw:** route · resolve · build · proxy · router · recipe-by-name · fail-closed · multi-tool · gate · binding
 
 - `Spec` (:17) — spec · tool · recipe-name · gate-arg · (a · stored · binding)
-- `RouteError` (:24) — route · error · tool · recipe · reason · unresolved
-- `Resolved` (:31) — resolved · router · errors
-- `Build` (:37) — build · resolve · specs · load · parse · fail-closed
+- `RouteError` (:25) — route · error · tool · recipe · reason · unresolved
+- `Resolved` (:32) — resolved · router · errors
+- `Build` (:38) — build · resolve · specs · load · parse · fail-closed
 
 ### `stoa-kernel/stag/serve/approvals.go`
 
@@ -261,7 +280,7 @@ Package router resolves the persisted route table (Planning/18) into a live prox
 
 **kw:** route · endpoints · tool · recipe · binding · list · put · delete · resolution · status · multi-tool
 
-- `RouteView` (:15) — route · view · tool · recipe · gatearg · valid · error · resolution
+- `RouteView` (:16) — route · view · tool · recipe · gatearg · valid · error · resolution
 
 ### `stoa-kernel/stag/serve/serve.go`
 Package serve is the HTTP operator surface over the gating proxy (Planning/16): the backend the Next.js console talks to. It wraps a proxy.Gate in a thin, fail-closed JSON HTTP layer — POST /api/decide gates a submitted 
@@ -318,20 +337,20 @@ Package store is the SQLite config store for the admin console's Adapters (Plann
 - `MCPTool` (:53) — mcp · tool · server · name · input · schema
 - `ContextProvider` (:60) — context · provider · name · kind · config · enabled
 - `Route` (:68) — route · tool · recipe · gate-arg · binding
-- `Store` (:75) — store · sqlite · db · handle
-- `Open` (:80) — open · create · run · ddl · fail-closed · no-migrations · single-conn
-- `Close` (:95) — close · db
-- `PutMCPServer` (:105) — put · mcp · server · upsert · replace · tools · transaction · atomic
-- `GetMCPServer` (:137) — get · mcp · server · with · tools · not-found · fail-closed
-- `toolsFor` (:156) — tools · for · server · ordered
-- `ListMCPServers` (:175) — list · mcp · servers · ordered · with · tools
-- `DeleteMCPServer` (:207) — delete · mcp · server · and · tools · transaction
-- `PutProvider` (:223) — put · provider · upsert
-- `ListProviders` (:235) — list · providers · ordered
-- `DeleteProvider` (:255) — delete · provider
-- `PutRoute` (:261) — put · route · upsert · by · tool
-- `ListRoutes` (:273) — list · routes · ordered
-- `DeleteRoute` (:291) — delete · route · by · tool
+- `Store` (:76) — store · sqlite · db · handle
+- `Open` (:81) — open · create · run · ddl · fail-closed · no-migrations · single-conn
+- `Close` (:96) — close · db
+- `PutMCPServer` (:106) — put · mcp · server · upsert · replace · tools · transaction · atomic
+- `GetMCPServer` (:138) — get · mcp · server · with · tools · not-found · fail-closed
+- `toolsFor` (:157) — tools · for · server · ordered
+- `ListMCPServers` (:176) — list · mcp · servers · ordered · with · tools
+- `DeleteMCPServer` (:208) — delete · mcp · server · and · tools · transaction
+- `PutProvider` (:224) — put · provider · upsert
+- `ListProviders` (:236) — list · providers · ordered
+- `DeleteProvider` (:256) — delete · provider
+- `PutRoute` (:262) — put · route · upsert · by · tool
+- `ListRoutes` (:274) — list · routes · ordered
+- `DeleteRoute` (:292) — delete · route · by · tool
 
 ## orchestrator
 
@@ -470,12 +489,42 @@ Command stag-proxy is the standing gating MCP server — the front door an agent
 
 **kw:** cmd · gate · mcp · gating · proxy · daemon · session-to-recipe · stdio · streamable-http · live-vs-ready · fail-closed · dispatch-role
 
+- `awaitFleet` (:226) — await · fleet · connect · all · downstreams · multi-server · route-picks-server
+
 ### `stoa-kernel/cmd/stag-serve/main.go`
 Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording
 
 **kw:** cmd · stag-serve · http · api · console · backend · gating · proxy · decide · log
 
+### `stoa-kernel/cmd/stag-tools/main.go`
+Command stag-tools serves a DECLARED set of local commands to an agent as MCP tools.  This is how you give a model real local capability without ever giving it a shell.  stag-tools -config tools.yaml            # stdio  
+
+**kw:** cmd · stag-tools · local · tools · mcp · stdio · http · declared · no-shell · gate-able
+
 ### `stoa-kernel/cmd/stoagraph/main.go`
 Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate with a working demo.  stoagraph up       mint the secrets, pull the signed images, start, print the 
 
 **kw:** cli · installer · launcher · up · down · demo · console · login-link · compose · ghcr · role-secrets · mint · one-click
+
+## other
+
+> 
+
+### `stoa-kernel/localtools/declare.go`
+Package localtools is the LOCAL TOOL SURFACE: a declared set of commands, served to an agent as MCP tools, so the model gets real local capability without ever getting a shell.  THE GUARDRAIL, and why this is a server ra
+
+**kw:** local · tools · declared · command · script · placeholder · argv · no-shell · guardrail · mcp · stdio
+
+- `Arg` (:40) — arg · declared · parameter · description · required
+- `Tool` (:49) — tool · declared · name · description · command · script · args · cwd · timeout
+- `Config` (:61) — config · root · timeout · tools · env-allow
+- `Load` (:84) — load · parse · validate · toolset · fail-closed
+- `Validate` (:108) — validate · guardrail · no-shell · argv0-authored · declared-args
+
+### `stoa-kernel/localtools/run.go`
+
+**kw:** run · local · tool · exec · argv · substitute · no-shell · clean-env · timeout · truncate
+
+- `Result` (:24) — result · output · exit-code · truncated · timed-out
+- `Run` (:38) — run · substitute · argv · exec · clean-env · timeout
+- `env` (:121) — env · allowlist · scrub · secrets · local · tool

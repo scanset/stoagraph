@@ -1,0 +1,9 @@
+{
+  "_why": "The escape hatch: a server that publishes NO OAuth metadata at all. Naming both endpoints makes the gate SKIP discovery entirely instead of guessing /authorize and /token and failing. Add token_auth_method only if it refuses the default negotiation.",
+  "authorization_endpoint": "https://vendor.example.com/oauth/authorize",
+  "token_endpoint": "https://vendor.example.com/oauth/token",
+  "client_id": "<from the vendor>",
+  "client_secret": "<from the vendor>",
+  "scopes": ["read"],
+  "token_auth_method": "client_secret_basic"
+}

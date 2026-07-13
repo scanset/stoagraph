@@ -32,7 +32,12 @@ services:
         # Baked in at build time (Next inlines NEXT_PUBLIC_*). These are the addresses the BROWSER
         # will call — not the compose service names, which a browser cannot resolve.
         NEXT_PUBLIC_API_BASE: ${PUBLIC_GATE_URL:-http://localhost:8080}
-        NEXT_PUBLIC_HARNESS_API: ${PUBLIC_HARNESS_URL:-http://localhost:8090}
+        NEXT_PUBLIC_HARNESS_API: ${PUBLIC_HARNESS_URL:-http://localhost:8092}
+  local-tools:
+    build:
+      <<: *gate-build
+      target: localtools # NOT distroless: a tool server must contain the commands it runs
+      args: [CMD=stag-tools]
   pii-demo:
     build:
       <<: *gate-build

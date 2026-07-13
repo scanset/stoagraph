@@ -24,6 +24,36 @@ tools/check.sh                     # before you commit
 tools/down.sh
 ```
 
+
+## Testing OAuth against a real identity provider
+
+Mocks prove we call what we think we call; they cannot prove we interoperate. Every OAuth bug in this
+codebase was found by a real provider disagreeing with an assumption. Two suites run against a real
+in-memory OIDC server — they **skip** when it is not running, so `go test ./...` stays green without it.
+
+```bash
+npm i -g @rustmcp/oauth2-test-server && oauth2-test-server     # http://localhost:8090
+go test ./stag/oauth/ ./stag/serve/ -run 'RealIdP|Rotation|Concurrent' -v
+```
+
+Its `/authorize` auto-approves a hardcoded test user, so the whole authorization-code leg runs headlessly
+— no browser, no human.
+
+| Test | Covers |
+|---|---|
+| `stag/oauth` · `TestAgainstRealIdP` | discovery → dynamic client registration → PKCE → auth-code redirect → token exchange → refresh **rotation** → the proxy's connect-time resolver |
+| `stag/oauth` · `TestConcurrentRefreshDoesNotLockOut` | two gate processes refreshing at once must not both spend the same single-use refresh token |
+| `stag/serve` · `TestOAuthSignInAgainstRealIdP` | the real HTTP endpoints: `/api/oauth/start` → the provider's redirect → `/api/oauth/callback` → `/api/oauth/status`. This is the console's **Sign in** button, minus the popup. |
+
+**Refresh-token rotation is the trap.** Providers issue a new refresh token on each refresh and revoke the
+old one. The gate must persist each rotated token, and — because `stag-proxy` (at connect) and
+`stag-serve` (at discovery) share `data/oauth/<server>.json` — must serialize refreshes across processes.
+It takes an exclusive file lock and **re-reads inside it**, so a loser adopts the winner's rotated token
+instead of spending a dead one. Without that, one refresh wins, the other gets `invalid_grant`, and a
+revoked token can land on disk — locking the operator out of a server they authorized.
+
+Set `STOAGRAPH_IDP_URL` to point the tests at a different provider.
+
 ## Layout, and the one rule
 
 ```
@@ -48,7 +78,7 @@ If that test goes red, it is not a style violation. The claim is false and the b
 |---|---|---|
 | `stag-serve` | 8080 | The gate's control plane: policy, approvals, audit. No model, no keys. |
 | `stag-proxy` | 8091 | The gate's MCP proxy. Sessions are bound to a recipe here. |
-| `harness-serve` | 8090 | The orchestrator's API. **Holds the model keys.** |
+| `harness-serve` | 8092 | The orchestrator's API. **Holds the model keys.** |
 | `kbserve` | 8095 | Example context provider (the READ channel's downstream). |
 | console | 3000 | One UI, talking to both backends. |
 

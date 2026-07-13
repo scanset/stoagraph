@@ -33,20 +33,27 @@ type ReadChannel struct {
 // label+record). A denied/escalated call returns a tool error and NEVER reaches downstream; a read is
 // always answered but stamped untrusted at origin.
 //
-// It advertises ONLY the tools the gate has a route for. An unrouted tool is already denied at Decide
-// (fail closed), so hiding it grants nothing — but it makes the agent's visible world exactly equal to
-// what policy permits. A downstream with 44 tools and one route offers the model ONE tool: it cannot
-// burn turns on calls that were always going to be refused, and a prompt-injected document cannot name
-// a capability the model has no way to know exists. Advertising is visibility; Decide is still the
-// enforcement, and it re-checks every call.
-func NewGatingServer(gate proxy.Gate, downstream *mcp.ClientSession, tools []*mcp.Tool, read ReadChannel) *mcp.Server {
+// It advertises ONLY the tools the gate has a route for AND some connected server owns. An unrouted
+// tool is already denied at Decide (fail closed), so hiding it grants nothing — but it makes the agent's
+// visible world exactly equal to what policy permits. A downstream with 44 tools and one route offers
+// the model ONE tool: it cannot burn turns on calls that were always going to be refused, and a
+// prompt-injected document cannot name a capability the model has no way to know exists. Advertising is
+// visibility; Decide is still the enforcement, and it re-checks every call.
+func NewGatingServer(gate proxy.Gate, fleet Fleet, read ReadChannel) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "stag", Version: "0.1"}, nil)
 	s.AddReceivingMiddleware(recordUnrouted(gate))
-	for _, t := range tools {
-		if _, routed := gate.Routes[t.Name]; !routed {
-			continue // no policy governs it => the agent is never even offered it
+	// The ROUTE DELEGATES. Each route names its server, so a cleared call is dispatched to the server
+	// the operator bound it to — not to whichever connected downstream happens to expose that name. Two
+	// servers may both expose `search_code`; each route says which one it means.
+	for name, rt := range gate.Routes {
+		d, decl, err := fleet.Lookup(rt.Server, name)
+		if err != nil {
+			// The route names a server that is not connected, or that does not expose this tool. Not
+			// advertised => the middleware refuses and RECORDS any call. Bind rejects it up front with the
+			// reason; this is the belt.
+			continue
 		}
-		s.AddTool(t, gatingHandler(gate, downstream))
+		s.AddTool(decl, gatingHandler(gate, d.Session))
 	}
 	for _, p := range read.Providers {
 		s.AddResourceTemplate(contextTemplate(p.Name()), contextHandler(p, read.Record))

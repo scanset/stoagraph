@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	stag "github.com/scanset/stoagraph/stoa-kernel/stag"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/auth"
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/mcpgate"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/sessiond"
 )
 
@@ -97,9 +98,12 @@ func TestSessionRecipeBinding(t *testing.T) {
 	// the daemon
 	sink := &spySink{}
 	deps := sessiond.Deps{
-		Sink:       sink,
-		Downstream: downSession,
-		Tools:      []*mcp.Tool{{Name: "scale_deployment", InputSchema: map[string]any{"type": "object"}}},
+		Sink: sink,
+		// The fleet: one downstream owning scale_deployment. A route resolves to its owner at bind.
+		Fleet: mcpgate.NewFleet([]mcpgate.Downstream{{
+			Name: "downstream", Session: downSession,
+			Tools: []*mcp.Tool{{Name: "scale_deployment", InputSchema: map[string]any{"type": "object"}}},
+		}}),
 		LoadRecipe: recipeLoader(),
 		Auth:       &auth.Authenticator{Tokens: testTokens}, // control plane ON (Planning/31)
 	}
@@ -145,7 +149,7 @@ var testTokens = auth.Tokens{Admin: "tok-admin", Approve: "tok-approve", Dispatc
 // and body — the raw primitive the auth tests assert on.
 func postSession(t *testing.T, base, token, tool, recipe, gateArg string) (int, string) {
 	t.Helper()
-	body := fmt.Sprintf(`{"routes":[{"tool":%q,"recipe":%q,"gateArg":%q}]}`, tool, recipe, gateArg)
+	body := fmt.Sprintf(`{"routes":[{"tool":%q,"server":"downstream","recipe":%q,"gateArg":%q}]}`, tool, recipe, gateArg)
 	req, err := http.NewRequest(http.MethodPost, base+"/sessions", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +169,7 @@ func postSession(t *testing.T, base, token, tool, recipe, gateArg string) (int, 
 
 func createSession(t *testing.T, base, tool, recipe, gateArg string) string {
 	t.Helper()
-	body := fmt.Sprintf(`{"routes":[{"tool":%q,"recipe":%q,"gateArg":%q}]}`, tool, recipe, gateArg)
+	body := fmt.Sprintf(`{"routes":[{"tool":%q,"server":"downstream","recipe":%q,"gateArg":%q}]}`, tool, recipe, gateArg)
 	req, _ := http.NewRequest(http.MethodPost, base+"/sessions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+testTokens.Dispatch) // the ORCHESTRATOR's role

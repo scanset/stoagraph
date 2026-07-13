@@ -1,0 +1,6 @@
+{
+  "_why": "GitHub has NO dynamic client registration, so you must register an OAuth App yourself (github.com/settings/developers) with callback http://localhost:8080/api/oauth/callback. Discovery works: its metadata lives at the RFC-9728 path-scoped URL and the gate finds it. Scopes default to all 12 it advertises, which is absurd for a least-privilege product -- name only what you need.",
+  "client_id": "<from your OAuth App>",
+  "client_secret": "<from your OAuth App>",
+  "scopes": ["repo", "read:org"]
+}

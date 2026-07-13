@@ -101,6 +101,12 @@ sees it. In **Adapters**, pick the scheme:
 | **query-param key** | keys passed in the URL (e.g. Alpha Vantage `?apikey=`) | param name + key |
 | **OAuth sign-in** | providers with a login flow | nothing — click **Sign in**; the gate runs discovery + PKCE and holds the auto-refreshing token |
 
+**Adding a provider never requires code.** A spec-compliant MCP server needs no configuration at all: the
+gate discovers its authorization server, registers itself dynamically, and signs in with PKCE. For the
+rest — a provider with no metadata, no dynamic registration, or a dialect of its own (Google's
+`access_type=offline`, Auth0's `audience`) — you paste a **provider profile**: JSON, not Go. See
+[`../oauth-profiles/`](../oauth-profiles/).
+
 ## The one rule
 
 Make each tool a **specific capability with a gate-able argument**. `notify(channel, text)` can be

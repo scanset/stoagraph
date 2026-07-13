@@ -86,11 +86,14 @@ func TestGatingProxyEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	gate := proxy.Gate{Routes: proxy.Router{
-		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text"},
+		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream"},
 	}}
 
 	// stag's gating MCP server, and pair B: the agent <-> that server
-	gatingSrv := mcpgate.NewGatingServer(gate, downstream, []*mcp.Tool{{Name: "write_note", Description: "gated write", InputSchema: noteSchema}}, mcpgate.ReadChannel{})
+	gatingSrv := mcpgate.NewGatingServer(gate,
+		mcpgate.NewFleet([]mcpgate.Downstream{{Name: "downstream", Session: downstream,
+			Tools: []*mcp.Tool{{Name: "write_note", Description: "gated write", InputSchema: noteSchema}}}}),
+		mcpgate.ReadChannel{})
 	aClientT, aServerT := mcp.NewInMemoryTransports()
 	gatingSess, err := gatingSrv.Connect(ctx, aServerT, nil)
 	if err != nil {

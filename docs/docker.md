@@ -29,7 +29,7 @@ Six containers, two Dockerfiles:
 |---|---|---|
 | `stag-serve` | 8080 | the **gate's** control plane — policy, approvals, audit |
 | `stag-proxy` | 8091 | the **gate's** MCP proxy — sessions bound to a recipe |
-| `harness-serve` | 8090 | the **orchestrator** — holds the model API keys |
+| `harness-serve` | 8092 | the **orchestrator** — holds the model API keys |
 | `kbserve` | 8095 | example context provider (the READ channel's downstream) |
 | `pii-demo` | 9000 | an example tool server (streamable HTTP) — the containment demo |
 | `console` | 3000 | one UI, two backends |

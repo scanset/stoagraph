@@ -1,0 +1,9 @@
+{
+  "_why": "Auth0 needs `audience` on BOTH authorize and token; without it you get an opaque token the API rejects. Replace the issuer/endpoints with your tenant. Auth0 does support dynamic registration, but most tenants disable it -- so a client_id is the safe path.",
+  "issuer": "https://YOUR-TENANT.us.auth0.com",
+  "client_id": "<from Auth0>",
+  "client_secret": "<from Auth0>",
+  "scopes": ["openid", "profile", "offline_access"],
+  "authorize_params": { "audience": "https://YOUR-API-IDENTIFIER" },
+  "token_params": { "audience": "https://YOUR-API-IDENTIFIER" }
+}

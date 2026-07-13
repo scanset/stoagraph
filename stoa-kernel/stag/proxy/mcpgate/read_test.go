@@ -41,7 +41,7 @@ func TestReadChannelServesLabeledContext(t *testing.T) {
 		Record:    record,
 	}
 	// READ-only server: no tools, so the (nil) downstream is never touched.
-	gatingSrv := mcpgate.NewGatingServer(proxy.Gate{Routes: proxy.Router{}}, nil, nil, read)
+	gatingSrv := mcpgate.NewGatingServer(proxy.Gate{Routes: proxy.Router{}}, mcpgate.Fleet{}, read)
 
 	aClientT, aServerT := mcp.NewInMemoryTransports()
 	gatingSess, err := gatingSrv.Connect(ctx, aServerT, nil)
@@ -116,7 +116,7 @@ func TestReadChannelEmptyIsHonestNotAnError(t *testing.T) {
 			recorded = append(recorded, ev)
 		},
 	}
-	gatingSrv := mcpgate.NewGatingServer(proxy.Gate{Routes: proxy.Router{}}, nil, nil, read)
+	gatingSrv := mcpgate.NewGatingServer(proxy.Gate{Routes: proxy.Router{}}, mcpgate.Fleet{}, read)
 
 	aClientT, aServerT := mcp.NewInMemoryTransports()
 	gatingSess, err := gatingSrv.Connect(ctx, aServerT, nil)

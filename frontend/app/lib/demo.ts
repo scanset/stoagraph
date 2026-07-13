@@ -51,8 +51,8 @@ export async function loadDemo(): Promise<string[]> {
   await addMCPServer({ name: "pii-demo", transport: "http", target: "http://pii-demo:9000/mcp" });
   steps.push("registered the pii-demo tool server");
 
-  await addRoute({ tool: "fetch_user_profile", recipe: "internal_lookup_policy", gateArg: "user_id" });
-  await addRoute({ tool: "send_external_reply", recipe: "external_reply_policy", gateArg: "message_body" });
+  await addRoute({ tool: "fetch_user_profile", server: "pii-demo", recipe: "internal_lookup_policy", gateArg: "user_id" });
+  await addRoute({ tool: "send_external_reply", server: "pii-demo", recipe: "external_reply_policy", gateArg: "message_body" });
   steps.push("routed 2 tools");
 
   return steps;

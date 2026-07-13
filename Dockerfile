@@ -47,3 +47,25 @@ COPY --from=build --chown=nonroot:nonroot /out/data        /app/data
 
 USER nonroot:nonroot
 ENTRYPOINT ["/app/stoagraph"]
+
+# ---------- runtime: the LOCAL TOOL SERVER (build with --target localtools, CMD=stag-tools) ----------
+# This is the one image that is deliberately NOT distroless, and the reason is honest: a tool server
+# exists to RUN REAL COMMANDS, so the commands have to be in the image. `grep` cannot grep from an image
+# that has no grep.
+#
+# That is not the hole it looks like. The containment is at the EXEC boundary, not in the absence of
+# binaries: stag-tools never invokes a shell, refuses shell-shaped declarations at load, and substitutes
+# every value into exactly one argv element — so a value cannot become a command no matter what sits on
+# disk. Busybox being present buys an attacker nothing, because nothing ever parses a string as a program.
+#
+# What this container buys YOU is blast radius. The tools can only touch what you mount. Mount the
+# workspace, mount it read-only, and mount NOTHING that holds a credential — see compose.yml.
+FROM alpine:3.20 AS localtools
+RUN apk add --no-cache git ripgrep && adduser -D -u 65532 nonroot
+WORKDIR /app
+
+COPY --from=build --chown=nonroot:nonroot /out/app         /app/stag-tools
+COPY --from=build --chown=nonroot:nonroot /out/healthcheck /app/healthcheck
+
+USER nonroot:nonroot
+ENTRYPOINT ["/app/stag-tools"]

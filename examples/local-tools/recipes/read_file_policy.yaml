@@ -1,0 +1,17 @@
+recipe: local_read_policy
+version: 1
+rules:
+  path.allowed:
+    kind: set_membership
+    set: ["README.md", "tools.yaml"]
+steps:
+  - id: propose_path
+    kind: propose
+    out: path
+  - id: read
+    kind: sink
+    in: path
+    field: local.read_file.path
+    sensitivity: authoritative
+    rule: path.allowed
+    actor: "policy:local_tools"

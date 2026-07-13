@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/auth"
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/mcpgate"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/sessiond"
 )
 
@@ -16,7 +17,12 @@ import (
 func guardedDaemon(t *testing.T, a *auth.Authenticator) *httptest.Server {
 	t.Helper()
 	deps := sessiond.Deps{
-		Tools:      []*mcp.Tool{{Name: "scale_deployment", InputSchema: map[string]any{"type": "object"}}},
+		// A fleet that OWNS the tool: these tests are about WHO may bind, so the binding itself must
+		// succeed for an authorized caller (an unowned tool would be rejected for a different reason).
+		Fleet: mcpgate.NewFleet([]mcpgate.Downstream{{
+			Name:  "downstream",
+			Tools: []*mcp.Tool{{Name: "scale_deployment", InputSchema: map[string]any{"type": "object"}}},
+		}}),
 		LoadRecipe: recipeLoader(),
 		Auth:       a,
 	}

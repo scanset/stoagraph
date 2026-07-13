@@ -48,6 +48,164 @@ many `Planning/` docs) predate this and use "StoaGraph" to mean the gate — rea
 
 ## Entries
 
+## 2026-07-13 — The route delegates: multi-downstream, and the server is part of the binding
+**Phase:** gate (ACT channel, adapters).
+**Status:** BUILT + verified live. The gate fronts SEVERAL MCP servers at once; a route names the server
+it dispatches to. Schema changed (`route.server_name`) → `config.db` re-initialized (no migrations).
+**Current step:** none in flight. Context providers (the READ channel) is the next area; survey below.
+**Done since last entry:**
+- **The gap:** `pickDownstream` connected the FIRST enabled server only. Registering GitHub + a local
+  tool server meant an agent could reach one of them. Now `awaitFleet` connects EVERY enabled server
+  (`mcpgate.Fleet`, addressed by name); one broken server is logged and skipped, not fatal.
+- **First attempt was wrong, and Curtis caught it.** I had the gate INFER the server from the tool name.
+  That is inference, and it had a real failure mode: registering an unrelated server that happens to
+  expose the same tool name could silently change — or invalidate — a route already written (`search_code`
+  exists on BOTH GH and local-tools; the GH route broke the moment local-tools was registered). A policy
+  that quietly changes when you add a server is the exact surprise this product exists to prevent.
+- **The fix: the ROUTE DELEGATES.** `route = tool → server → recipe → gateArg`, threaded end to end (DDL,
+  store, router.Spec, proxy.Route, POST /sessions, /api/routes, console). The gate never guesses. Two
+  servers may share a tool name and both be routed — nothing to rename, nothing to disambiguate.
+- Bind rejects an undispatchable route WITH ITS REASON ("no connected MCP server named X" / "server X
+  does not expose a tool named Y"); `/api/routes` validates at authoring time against the server's
+  discovered tools.
+- **Bug found:** a PARTIAL binding returned a clean 200 with the dropped routes omitted — the dispatcher
+  would hand an agent a task needing a tool the agent never got, surfacing as confused model behaviour
+  rather than the config error it was. `routeErrors` now returned on success too.
+- Console: the route form flattened `servers.flatMap(s => s.tools)`, losing the server. It now picks
+  **server · tool** together (grouped by server) and shows the server on every route row.
+- Live: one session, two servers — `read_file` → local-tools' README, `get_file_contents` → GitHub's
+  README (real API SHA), `/etc/passwd` denied. `config.db` re-init restored losslessly from a backup
+  (GH's PAT included).
+**Staged for this step:** nothing.
+**Next action:** solidify context providers, against the ladder already ratified in
+[Planning/33](planning/33-context-provider-kinds.md). Start with **/33 hardening #1 — chain the read log**:
+`reads.jsonl` is still a plain append log (`readRecorder` marshals `{kind,ts,event}` with no prev_hash and
+no Verify) while ACT crossings are hash-chained. The product claims "every tool call **and every context
+read** … recorded as proof"; the read half is currently **not provable** — a read record can be edited or
+deleted with zero evidence. Then C1 (`static` kind) per /33.
+**A code survey of the READ channel found three gaps /33 does NOT name** — record them before they are lost:
+1. **Context providers have no auth at all.** `provider.HTTP.Provide` does a bare `GET`. MCP servers now
+   have bearer/header/query/OAuth; providers have nothing, so no private KB, Confluence or internal wiki is
+   reachable — and providers are exactly where the sensitive data lives. (/33 gives `mcp_resource` the /28
+   transport auth, but the BUILT `http` kind gets none.)
+2. **The inbound response is unbounded.** `io.ReadAll(resp.Body)` with no cap: a large or hostile response
+   blows memory and floods the model's context. (/33 bounds the OUTBOUND query — a different concern.)
+3. **Per-item provenance is flattened.** The whole body becomes ONE `ContextItem`
+   (`{Source: name, Text: string(body)}`), so the record cannot answer "*which document* did this line come
+   from?" — which /33's per-item content hash presumes.
+What IS already solid: `Gather` forces `Trust = Untrusted` on every item and overrides whatever the provider
+set. The label is unbypassable and tested. That is the hard part, and it is right.
+**Open decisions:** one unified audit chain (reads + acts interleaved — what prompt-injection forensics
+actually needs: "it read the ticket, THEN tried to send the SSN") vs a separate read chain, leaning unified;
+/33 hardening #1 says "chain the read log" without settling which. Tool ALIASING: a route is keyed by tool
+name, so only ONE `search_code` can be routed; exposing BOTH servers' `search_code` to one agent at once
+would need an agent-facing alias. Not needed yet.
+
+## 2026-07-13 — stag-tools: real local capability for the model, and never a shell
+**Phase:** gate (adapters).
+**Status:** BUILT + verified. A declared local tool server, its own container, gated end to end.
+**Done since last entry:**
+- **`localtools` + `cmd/stag-tools`** (stdio AND streamable HTTP): a toolset is DECLARED in `tools.yaml`
+  (name, `command:` argv or `script:`, `{placeholder}` args, cwd, timeout, env allowlist). One MCP tool per
+  declaration; the schema the model sees is exactly the operator's declaration.
+- **The guardrail is structural, not a filter.** The command is authored by the operator; the model only
+  fills declared placeholders; argv goes to execve DIRECTLY. Substitution is PER-ARGV-ELEMENT, so a value
+  never re-splits: `search_code(pattern: "root; touch /tmp/PWNED")` searches for that literal string —
+  verified, `/tmp/PWNED` was never created. Same for `$(whoami)`, backticks, pipes, newlines.
+- **`run_command` cannot exist.** A shell with a placeholder in its script argument (`bash -c "{cmd}"`)
+  REFUSES TO LOAD — the whole file, with an actionable message. Also refused: a placeholder in `argv[0]`
+  (the model choosing the *program*), undeclared placeholders, unused declared args.
+- **SECURITY FIX (live bug):** `exec.Command` leaves `cmd.Env` nil, so EVERY stdio MCP server registered
+  inherited the gate proxy's whole environment — including `STAG_DISPATCH_TOKEN`. A tool server could have
+  read it and bound its own sessions to ANY recipe: **the thing being gated could grant itself any tool in
+  the system.** `scrubControlPlane` now strips the gate's own secrets before spawn (the rest of the env is
+  kept — a stdio server still authenticates to its own target). `stag-tools` independently builds its
+  tools' env from an allowlist.
+- **Its own container** (`local-tools`), and deliberately NOT distroless — a tool server must contain the
+  commands it runs. That is not the hole it looks like: containment is at the exec boundary, not the
+  absence of binaries. What the container buys is BLAST RADIUS: `read_only` rootfs, `cap_drop: ALL`,
+  no-new-privileges, **`environment: {}`** (no gate secrets), and the workspace mounted read-only —
+  verified from inside: only `/workspace` reachable, `.env` unreachable, zero secrets in env.
+- Under Docker it speaks **streamable HTTP**, not stdio: stdio would run the tool inside the gate's own
+  container, sharing its filesystem and (before the fix) its environment. stdio remains for the local case
+  (a desktop agent spawning it directly).
+- `examples/local-tools/` — `tools.yaml`, a gating recipe, a script tool, README.
+**Next action:** see the entry above.
+**Open decisions:** none.
+
+## 2026-07-13 — OAuth for downstream MCP servers: built, and four real bugs found by testing it for real
+**Phase:** gate (adapters, Planning/28).
+**Status:** BUILT + verified against a real OIDC provider. Adding a provider requires DATA, never code.
+**Done since last entry:**
+- **`stag/oauth`**: full OAuth 2.1 authorization-code flow — metadata discovery (RFC 9728 → 8414/OIDC),
+  dynamic client registration (RFC 7591), PKCE S256, code exchange, refresh. `adapterauth` resolves an
+  `oauth` server to a fresh bearer at connect; `mcpgate` never sees "oauth". The GATE holds the tokens
+  (`data/oauth/<server>.json`, 0600); the agent never does.
+- `/api/oauth/{start,callback,status}` + a console **Sign in** button (popup + poll). Start is admin-only;
+  the callback is public and authenticated by the unguessable state it minted.
+- **`query` scheme** (Alpha Vantage: `?apikey=`): the key is injected into the runtime endpoint only —
+  never into the stored/displayed target. Verified live.
+- **Provider profiles as DATA** (`examples/oauth-profiles/`): endpoint overrides (a provider with no
+  metadata at all — discovery is skipped), `client_id`/secret, scopes, `token_auth_method`, and
+  **`authorize_params`** — without which **Google silently issues no refresh token** (`access_type=offline`)
+  and Auth0 returns a token its own API rejects (`audience`). A new "adapter" is a JSON file.
+- **Bugs found by pointing it at reality, none of which a mock would have caught:**
+  1. **Discovery missed GitHub's metadata.** RFC 9728 PATH-SCOPES the document
+     (`/.well-known/oauth-protected-resource/mcp`); the bare origin 404s. Same for RFC 8414 when the
+     issuer has a path. Now honours the `WWW-Authenticate: resource_metadata=` hint first.
+  2. **`Save` was not concurrency-safe** — a fixed temp filename, so concurrent writes clobbered each other.
+  3. **Refresh rotation could lock the operator out.** Refresh tokens are SINGLE-USE. `stag-proxy` (at
+     connect) and `stag-serve` (at discovery) share the token file; both could spend the same one, and a
+     REVOKED token could get persisted — every future refresh then fails, with no obvious cause. Fixed with
+     a cross-process flock and a **re-read inside the lock** (the loser adopts the winner's rotated token).
+  4. **Only `client_secret_post`.** The RFC makes `client_secret_basic` MANDATORY for servers and leaves the
+     body form optional — we implemented the optional one. A Basic-only provider would have been rejected
+     with `invalid_client` forever. Now negotiated from `token_endpoint_auth_methods_supported`, with an
+     automatic fallback (and no retry on a bad grant — that would just burn the code).
+- **Integration tests against a real IdP** (`@rustmcp/oauth2-test-server`; its `/authorize` auto-approves, so
+  the whole flow runs headlessly): `TestAgainstRealIdP`, `TestConcurrentRefreshDoesNotLockOut`,
+  `TestOAuthSignInAgainstRealIdP` (the console's Sign-in button, minus the popup). They SKIP when the IdP is
+  absent, so `go test ./...` stays green. Documented in `docs/development.md`.
+- **harness-serve moved to host port 8092** (container still `:8090`) — 8090 is the IdP's default and the
+  orchestrator kept colliding with it.
+**Next action:** see the top entry.
+**Open decisions:** the console's popup JS (`window.open` + polling) is still untested in a browser, and no
+sign-in against a real third-party provider (GitHub/Notion) has been COMPLETED — GitHub was tested with a
+PAT instead. Those two are where I would still expect a surprise.
+
+## 2026-07-13 — The audit unit is the DECISION, not the crossing
+**Phase:** gate (record).
+**Status:** BUILT + verified. Log format changed → the chain was reset.
+**Done since last entry:**
+- **A denied call was writing a release into the tamper-evident log.** Found live against GitHub: a
+  multi-arg recipe evaluates EVERY sink, so `owner=mallory` fails while `repo=stoagraph` passes — the
+  passing sink emitted a `ReleaseEvent` even though the verdict was DENY and nothing was forwarded. The
+  audit claimed the agent read a repo the gate had blocked. **A record of a release that did not happen is
+  worse than no record.**
+- **`stag.DecisionRecord` replaces `ReleaseEvent` as the chain's leaf.** EVERY decision is recorded — allow,
+  deny, escalate — because a blocked attempt is the evidence the control worked, and a log of only the
+  permitted actions cannot answer the question an auditor actually asks: *did anything try?* Releases ride
+  along **only when the call was forwarded**. The record states what HAPPENED, never what merely evaluated.
+- **The gate advertises only ROUTED tools.** GitHub's server exposes 44 (`delete_file`,
+  `create_repository`…); with one route the agent is offered ONE. It cannot burn turns on calls that were
+  always going to be refused, and a prompt-injected document cannot name a capability the model has no way
+  to know exists.
+- **…and that created a second bug, which is now fixed.** Hiding a tool made the SDK reject the name as
+  "unknown tool" BEFORE any gate code ran — so an agent reaching for a hidden tool left NO TRACE. An agent
+  naming a tool it was never offered is the loudest signal in the system (injection or jailbreak). A
+  receiving middleware now routes those through `Decide`: refused AND recorded.
+- **`/api/decide` is now a SIMULATOR** (`egress.DiscardSink`). It was writing to the same hash-chained log
+  as the enforcement proxy — two writers on one chain, which forks it. The proxy is the sole writer;
+  stag-serve reads the log to display it.
+- `/records` (the page existed in the nav but 404'd) now shows every decision with an allow/blocked filter,
+  the deciding rule, and what actually crossed. `verified` no longer conflated "chain intact" with
+  "signature present".
+- **[docs/routes.md](docs/routes.md)** — route bindings were essentially undocumented. It now covers "no
+  route, no call", `gateArg` as a comma-list, and **the blast-radius trap**: gating `repo` but not `owner`
+  ALLOWED `mallory/stoagraph`. A real bypass, in a policy written an hour earlier.
+**Next action:** superseded by the entries above.
+**Open decisions:** none.
+
 ## 2026-07-12 — Planning/33 ratified: context provider kinds (static, skill, signature tier)
 **Phase:** orchestration (READ channel).
 **Status:** PLAN — the /30 READ channel's kind taxonomy is ratified; `http` remains the only built kind.

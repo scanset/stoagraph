@@ -21,6 +21,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -143,18 +144,20 @@ func main() {
 		reg := sessiond.NewRegistry()
 
 		go func() {
-			srv, session, tools := awaitDownstream(ctx, st, oauthStore, *downstream)
-			defer session.Close()
+			fleet, downs := awaitFleet(ctx, st, oauthStore, *downstream)
+			for _, d := range downs {
+				defer d.Session.Close()
+			}
 			h := sessiond.Handler(reg, sessiond.Deps{
 				Sink: sink, Approvals: st, OnEscalate: onEscalate,
-				Downstream: session, Tools: tools, LoadRecipe: recipes.Get,
+				Fleet: fleet, LoadRecipe: recipes.Get,
 				RecordRead: readRecorder(rf),
 				Auth:       an,
 			})
 			ready.Store(&h)
-			log.Printf("downstream %q connected (%s: %s, %d tools) — POST /sessions to bind, connect /mcp/<token>",
-				srv.Name, srv.Transport, srv.Target, len(tools))
-			select {} // the connection is held for the process lifetime
+			log.Printf("fleet ready: %d server(s) %v — POST /sessions to bind, connect /mcp/<token>",
+				len(downs), fleet.Servers())
+			select {} // the connections are held for the process lifetime
 		}()
 
 		mux := http.NewServeMux()
@@ -194,7 +197,7 @@ func main() {
 	die(err)
 	specs := make([]router.Spec, 0, len(routes))
 	for _, rt := range routes {
-		specs = append(specs, router.Spec{Tool: rt.Tool, Recipe: rt.Recipe, GateArg: rt.GateArg})
+		specs = append(specs, router.Spec{Tool: rt.Tool, Server: rt.Server, Recipe: rt.Recipe, GateArg: rt.GateArg})
 	}
 	resolved := router.Build(specs, recipes.Get)
 	for _, re := range resolved.Errors {
@@ -204,14 +207,63 @@ func main() {
 	log.Printf("stag-proxy: downstream %q (%s: %s) — %d tool(s), %d route(s); serving gated MCP over stdio",
 		srv.Name, srv.Transport, srv.Target, len(tools), len(routes))
 	// stdio v1 is tools-only (no session-bound READ channel); the daemon serves context resources.
-	gatingSrv := mcpgate.NewGatingServer(gate, session, tools, mcpgate.ReadChannel{})
+	gatingSrv := mcpgate.NewGatingServer(gate,
+		mcpgate.NewFleet([]mcpgate.Downstream{{Name: srv.Name, Session: session, Tools: tools}}),
+		mcpgate.ReadChannel{})
 	die(gatingSrv.Run(ctx, &mcp.StdioTransport{}))
 }
 
+// awaitFleet connects EVERY enabled MCP server and returns them indexed by the tools they own.
+//
+// The gate fronts several tool servers at once — a GitHub server and a local tool server reach one agent
+// — and the ROUTE decides which one a cleared call reaches. So we connect them all; a route resolves to
+// its owner at bind.
+//
+// It blocks until at least ONE server connects: a gate with nothing to mediate must not pretend it is
+// mediating. A server that is registered but unreachable is logged and skipped, not fatal — one broken
+// tool server must not take down every other tool the agent has.
+// kw: await fleet connect all downstreams multi-server route-picks-server
+func awaitFleet(ctx context.Context, st *store.Store, oauthStore oauth.Store, only string) (mcpgate.Fleet, []mcpgate.Downstream) {
+	const retry = 5 * time.Second
+	for attempt := 0; ; attempt++ {
+		servers, err := st.ListMCPServers(ctx)
+		if err == nil && only != "" { // -downstream pins the gate to ONE server
+			servers = slices.DeleteFunc(servers, func(s store.MCPServer) bool { return s.Name != only })
+		}
+		var downs []mcpgate.Downstream
+		for _, srv := range servers {
+			if !srv.Enabled {
+				continue
+			}
+			dauth, aerr := adapterauth.Resolve(ctx, oauthStore, nil, srv)
+			if aerr != nil {
+				if attempt == 0 {
+					log.Printf("downstream %q not ready: %v", srv.Name, aerr)
+				}
+				continue
+			}
+			session, tools, cerr := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
+			if cerr != nil {
+				if attempt == 0 {
+					log.Printf("downstream %q (%s: %s) unreachable: %v — skipping", srv.Name, srv.Transport, srv.Target, cerr)
+				}
+				continue
+			}
+			log.Printf("downstream %q connected (%s: %s, %d tools)", srv.Name, srv.Transport, srv.Target, len(tools))
+			downs = append(downs, mcpgate.Downstream{Name: srv.Name, Session: session, Tools: tools})
+		}
+		if len(downs) > 0 {
+			return mcpgate.NewFleet(downs), downs
+		}
+		if attempt == 0 {
+			log.Printf("no MCP server reachable yet — waiting. Register one in the console (Adapters). Retrying every %s.", retry)
+		}
+		time.Sleep(retry)
+	}
+}
+
 // awaitDownstream blocks until a downstream MCP server is registered AND reachable, then connects.
-// It re-reads the config store each attempt, so registering a server from the console (or an example's
-// setup) is picked up without a restart. Nothing is served until this succeeds — a gate with no
-// downstream has nothing to mediate, and it must never fall open while it waits.
+// Used by the stdio path, which fronts exactly one server by design (one agent, one host).
 func awaitDownstream(ctx context.Context, st *store.Store, oauthStore oauth.Store, name string) (store.MCPServer, *mcp.ClientSession, []*mcp.Tool) {
 	const retry = 5 * time.Second
 	for attempt := 0; ; attempt++ {

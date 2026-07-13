@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -64,7 +66,16 @@ func transportFor(kind, target string, a Auth) (mcp.Transport, error) {
 		if len(fields) == 0 {
 			return nil, fmt.Errorf("mcpgate: empty stdio command")
 		}
-		return &mcp.CommandTransport{Command: exec.Command(fields[0], fields[1:]...)}, nil
+		cmd := exec.Command(fields[0], fields[1:]...)
+		// A stdio server is a CHILD of the gate, and exec.Command with a nil Env inherits the gate's
+		// entire environment — which holds STAG_DISPATCH_TOKEN. A downstream tool server could read it
+		// and bind its OWN sessions to ANY recipe: the thing being gated would be able to grant itself
+		// whatever tools it liked. Strip the control plane before handing over the process.
+		//
+		// The rest of the env is deliberately KEPT: a stdio server legitimately authenticates to its own
+		// target from the environment (GITHUB_TOKEN, KUBECONFIG…). Only the gate's own authority goes.
+		cmd.Env = scrubControlPlane(os.Environ())
+		return &mcp.CommandTransport{Command: cmd}, nil
 	case "http":
 		if target == "" {
 			return nil, fmt.Errorf("mcpgate: empty http endpoint")
@@ -160,4 +171,30 @@ func Discover(ctx context.Context, t mcp.Transport) ([]DiscoveredTool, error) {
 		out = append(out, DiscoveredTool{Name: tl.Name, Description: tl.Description, InputSchema: schema})
 	}
 	return out, nil
+}
+
+// controlPlaneVars are the gate's OWN secrets. A downstream tool server must never see them: holding
+// `dispatch` lets a process bind sessions to any recipe, and holding `approve` lets it release its own
+// escalations. Both would make the gate's authority available to the thing it is gating.
+var controlPlaneVars = []string{
+	"STAG_ADMIN_TOKEN",
+	"STAG_APPROVE_TOKEN",
+	"STAG_DISPATCH_TOKEN",
+	"STAG_CONSOLE_TOKEN",
+	"HARNESS_OPERATOR_TOKEN",
+}
+
+// scrubControlPlane returns env with the gate's control-plane secrets removed. Everything else is
+// preserved — a stdio server still authenticates to its own target from the environment.
+// kw: scrub control-plane env stdio subprocess secret leak
+func scrubControlPlane(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(controlPlaneVars, name) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }

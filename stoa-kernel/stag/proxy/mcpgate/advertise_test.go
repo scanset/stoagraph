@@ -48,7 +48,7 @@ func TestAdvertisesOnlyRoutedTools(t *testing.T) {
 	}
 	sink := &recSink{}
 	gate := proxy.Gate{Routes: proxy.Router{
-		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text"},
+		"write_note": {Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: "text", Server: "downstream"},
 	}, Sink: sink}
 
 	all := []*mcp.Tool{
@@ -56,7 +56,9 @@ func TestAdvertisesOnlyRoutedTools(t *testing.T) {
 		{Name: "delete_file", Description: "DESTRUCTIVE", InputSchema: noteSchema},
 		{Name: "create_repository", Description: "DESTRUCTIVE", InputSchema: noteSchema},
 	}
-	gatingSrv := mcpgate.NewGatingServer(gate, downstream, all, mcpgate.ReadChannel{})
+	gatingSrv := mcpgate.NewGatingServer(gate,
+		mcpgate.NewFleet([]mcpgate.Downstream{{Name: "downstream", Session: downstream, Tools: all}}),
+		mcpgate.ReadChannel{})
 
 	aClientT, aServerT := mcp.NewInMemoryTransports()
 	gatingSess, err := gatingSrv.Connect(ctx, aServerT, nil)

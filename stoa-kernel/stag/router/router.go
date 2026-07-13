@@ -16,6 +16,7 @@ import (
 // kw: spec tool recipe-name gate-arg (a stored binding)
 type Spec struct {
 	Tool    string
+	Server  string // the MCP server this tool is dispatched to. Declared, never inferred.
 	Recipe  string
 	GateArg string
 }
@@ -50,7 +51,7 @@ func Build(specs []Spec, loadRecipe func(name string) ([]byte, error)) Resolved 
 			res.Errors = append(res.Errors, RouteError{Tool: sp.Tool, Recipe: sp.Recipe, Err: err.Error()})
 			continue // fail closed: no entry -> tool unrouted -> gate denies
 		}
-		res.Router[sp.Tool] = proxy.Route{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: sp.GateArg, RecipeName: sp.Recipe}
+		res.Router[sp.Tool] = proxy.Route{Recipe: p.Recipe, RecipeHash: p.SemanticHash, GateArg: sp.GateArg, RecipeName: sp.Recipe, Server: sp.Server}
 	}
 	return res
 }

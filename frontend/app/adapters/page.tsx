@@ -128,6 +128,7 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [scopes, setScopes] = useState("");
+  const [profile, setProfile] = useState(""); // provider profile JSON (see examples/oauth-profiles/)
 
   const selectCls = "rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2 py-1.5 text-[12px] text-[var(--text)]";
   // header + query carry a name field; bearer/header/query carry a secret; oauth carries neither
@@ -190,6 +191,16 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
               className="min-w-[9rem] flex-1 rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2.5 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--faint)]"
             />
             <Input placeholder="scopes (e.g. repo read:org) — blank = ALL the server advertises" value={scopes} onChange={(e) => setScopes(e.target.value)} />
+            {/* The escape hatch. A spec-compliant server needs none of this; a provider profile is how you
+             * speak a dialect (Google's access_type=offline, Auth0's audience, a vendor with no metadata)
+             * WITHOUT anyone writing an adapter. See examples/oauth-profiles/. */}
+            <textarea
+              placeholder='provider profile JSON (optional) — e.g. {"authorize_params":{"access_type":"offline"}}'
+              value={profile}
+              onChange={(e) => setProfile(e.target.value)}
+              rows={2}
+              className="min-w-[18rem] flex-1 rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2.5 py-1.5 font-mono text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--faint)]"
+            />
             <span className="text-[11px] text-[var(--faint)]">then click <span className="text-[var(--accent)]">Sign in</span> on the row →</span>
           </>
         )}
@@ -197,14 +208,22 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
           disabled={!name || !target || (named && !authHeader) || (needsSecret && !secret && !secretEnv)}
           onClick={() =>
             wrap(async () => {
-              // oauth extras ride in oauthConfig (non-secret client id + scopes; secret only if given)
+              // The provider PROFILE is the base (endpoints, auth method, authorize/token params — data,
+              // not code); the discrete fields overlay it. Adding a provider must never need a release.
               let oauthConfig = "";
-              if (isOAuth && (clientId || clientSecret || scopes.trim())) {
-                oauthConfig = JSON.stringify({
-                  client_id: clientId,
-                  client_secret: clientSecret,
-                  scopes: scopes.trim() ? scopes.trim().split(/[\s,]+/) : undefined,
-                });
+              if (isOAuth) {
+                let base: Record<string, unknown> = {};
+                if (profile.trim()) {
+                  try {
+                    base = JSON.parse(profile);
+                  } catch {
+                    throw new Error("provider profile is not valid JSON");
+                  }
+                }
+                if (clientId) base.client_id = clientId;
+                if (clientSecret) base.client_secret = clientSecret;
+                if (scopes.trim()) base.scopes = scopes.trim().split(/[\s,]+/);
+                if (Object.keys(base).length > 0) oauthConfig = JSON.stringify(base);
               }
               await addMCPServer({ name, transport, target, authScheme, authHeader, secret, secretEnv, oauthConfig });
               setName("");
@@ -215,6 +234,7 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
               setClientId("");
               setClientSecret("");
               setScopes("");
+              setProfile("");
               setAuthScheme("none");
             })
           }
@@ -404,20 +424,33 @@ function Routes({
   servers: MCPServerView[];
   wrap: (fn: () => Promise<void>) => void;
 }) {
-  const [tool, setTool] = useState("");
+  // A route is server + tool -> recipe -> arg. The SERVER is part of the binding: the gate must never
+  // work out which downstream a tool belongs to, or registering another server that happens to expose
+  // the same tool name could silently change a route you already wrote.
+  const [pick, setPick] = useState(""); // "server\u0000tool"
   const [recipe, setRecipe] = useState("");
   const [gateArg, setGateArg] = useState("");
-  const tools = servers.flatMap((s) => s.tools.map((t) => t.name));
+  const [server, tool] = pick ? pick.split("\u0000") : ["", ""];
 
   return (
-    <Card title="Route bindings" sub="tool → recipe · the gate's source of truth">
+    <Card title="Route bindings" sub="server · tool → recipe · the gate's source of truth">
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-5 py-3">
-        <Input placeholder="tool" value={tool} onChange={(e) => setTool(e.target.value)} list="tools" />
-        <datalist id="tools">
-          {tools.map((t) => (
-            <option key={t} value={t} />
+        <select
+          value={pick}
+          onChange={(e) => setPick(e.target.value)}
+          className="min-w-[14rem] rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2 py-1.5 font-mono text-[12px] text-[var(--text)]"
+        >
+          <option value="">server · tool…</option>
+          {servers.map((s) => (
+            <optgroup key={s.name} label={s.name}>
+              {s.tools.map((t) => (
+                <option key={s.name + t.name} value={`${s.name}\u0000${t.name}`}>
+                  {t.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
-        </datalist>
+        </select>
         <select
           value={recipe}
           onChange={(e) => setRecipe(e.target.value)}
@@ -432,11 +465,11 @@ function Routes({
         </select>
         <Input placeholder="arg" value={gateArg} onChange={(e) => setGateArg(e.target.value)} />
         <AddBtn
-          disabled={!tool || !recipe || !gateArg}
+          disabled={!tool || !server || !recipe || !gateArg}
           onClick={() =>
             wrap(async () => {
-              await addRoute({ tool, recipe, gateArg });
-              setTool("");
+              await addRoute({ tool, server, recipe, gateArg });
+              setPick("");
               setGateArg("");
             })
           }
@@ -448,6 +481,10 @@ function Routes({
         routes.map((r) => (
           <div key={r.tool} className="flex items-center justify-between border-t border-[var(--border)] px-5 py-2.5 first:border-t-0">
             <div className="flex min-w-0 items-center gap-2">
+                {/* the server is part of the binding — a route reads as "where + what" */}
+                <span className="rounded bg-[var(--panel-3)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--muted)]">
+                  {r.server || "⚠ no server"}
+                </span>
               <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.valid ? "var(--allow)" : "var(--deny)" }} />
               <span className="font-mono text-[13px] text-[var(--text)]">{r.tool}</span>
               <span className="text-[var(--faint)]">→</span>

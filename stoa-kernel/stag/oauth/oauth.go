@@ -12,11 +12,13 @@ package oauth
 // file-kw: oauth downstream authorization-code pkce dcr discovery refresh token-store bearer
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,6 +48,24 @@ type Config struct {
 	ClientID              string   `json:"client_id"`
 	ClientSecret          string   `json:"client_secret,omitempty"`
 	Scopes                []string `json:"scopes,omitempty"`
+	// TokenAuthMethod is how this provider wants the client authenticated at the token endpoint
+	// (client_secret_basic | client_secret_post | none). It is PER-PROVIDER — taken from the server's
+	// advertised token_endpoint_auth_methods_supported — and persisted so a later refresh, loaded from
+	// disk in another process, authenticates the same way the sign-in did.
+	TokenAuthMethod string `json:"token_auth_method,omitempty"`
+
+	// AuthorizeParams and TokenParams are the ESCAPE HATCH that makes this work for providers we have
+	// never heard of, WITHOUT writing code for each one. Plenty of real providers need a non-standard
+	// parameter and simply fail (often silently) without it:
+	//
+	//   Google  authorize: access_type=offline, prompt=consent   <- without these you get NO refresh
+	//                                                               token and are logged out in an hour
+	//   Auth0   authorize + token: audience=<api>                <- without it the token is unusable
+	//   Slack   authorize: user_scope=<scopes>
+	//
+	// An operator declares these once, per server, as data. No adapter, no release.
+	AuthorizeParams map[string]string `json:"authorize_params,omitempty"`
+	TokenParams     map[string]string `json:"token_params,omitempty"`
 }
 
 // Tokens is the sensitive half: what actually authorizes downstream calls.
@@ -90,6 +110,8 @@ func (s Store) Load(server string) (State, error) {
 }
 
 // Save writes a server's state atomically (temp + rename), 0600, creating Dir 0700 on first use.
+// The temp file gets a UNIQUE name: a fixed one (<server>.json.tmp) makes concurrent saves clobber each
+// other — two writers race on the same path and one's rename finds nothing there.
 func (s Store) Save(server string, st State) error {
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return err
@@ -98,8 +120,21 @@ func (s Store) Save(server string, st State) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.path(server) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.CreateTemp(s.Dir, safeName(server)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op once the rename succeeds
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.path(server))
@@ -117,23 +152,53 @@ func (s Store) Bearer(ctx context.Context, hc *http.Client, server string) (stri
 	if !st.Authorized() {
 		return "", fmt.Errorf("oauth: %q has no access token (run sign-in)", server)
 	}
-	if !st.Tokens.Expiry.IsZero() && time.Until(st.Tokens.Expiry) <= refreshSkew {
-		if st.Tokens.RefreshToken == "" {
-			return "", fmt.Errorf("oauth: %q token expired and no refresh token (re-run sign-in)", server)
+	if !stale(st) {
+		return st.Tokens.AccessToken, nil // still good: no lock, no refresh
+	}
+
+	// REFRESH UNDER A CROSS-PROCESS LOCK. Providers rotate: a refresh token is single-use, and spending
+	// it twice returns invalid_grant. stag-proxy (connect) and stag-serve (discovery) share this file, so
+	// without the lock they can both spend the SAME token — one wins, the other fails, and a revoked
+	// token can get persisted, locking the operator out of a server they authorized.
+	//
+	// Re-reading INSIDE the lock is the other half: by the time we get it, the winner may already have
+	// refreshed and rotated. We must use their new token, not spend the dead one we read before waiting.
+	var access string
+	lerr := s.withLock(server, func() error {
+		cur, err := s.Load(server)
+		if err != nil {
+			return err
 		}
-		nt, rerr := st.Config.Refresh(ctx, hc, st.Tokens.RefreshToken)
+		if !stale(cur) { // another process refreshed while we waited — take its token, do not refresh again
+			access = cur.Tokens.AccessToken
+			return nil
+		}
+		if cur.Tokens.RefreshToken == "" {
+			return fmt.Errorf("oauth: %q token expired and no refresh token (re-run sign-in)", server)
+		}
+		nt, rerr := cur.Config.Refresh(ctx, hc, cur.Tokens.RefreshToken)
 		if rerr != nil {
-			return "", fmt.Errorf("oauth: refresh for %q failed: %w", server, rerr)
+			return fmt.Errorf("oauth: refresh for %q failed: %w", server, rerr)
 		}
 		if nt.RefreshToken == "" { // provider did not rotate: keep the existing one
-			nt.RefreshToken = st.Tokens.RefreshToken
+			nt.RefreshToken = cur.Tokens.RefreshToken
 		}
-		st.Tokens = nt
-		if serr := s.Save(server, st); serr != nil {
-			return "", serr
+		cur.Tokens = nt
+		if serr := s.Save(server, cur); serr != nil {
+			return serr
 		}
+		access = nt.AccessToken
+		return nil
+	})
+	if lerr != nil {
+		return "", lerr
 	}
-	return st.Tokens.AccessToken, nil
+	return access, nil
+}
+
+// stale reports whether the access token is at or near expiry (a zero expiry never expires).
+func stale(st State) bool {
+	return !st.Tokens.Expiry.IsZero() && time.Until(st.Tokens.Expiry) <= refreshSkew
 }
 
 // ---- discovery (RFC 9728 protected-resource -> RFC 8414 authorization-server) ----------------------
@@ -187,16 +252,20 @@ func Discover(ctx context.Context, hc *http.Client, mcpURL string) (Config, erro
 	// https://github.com/.well-known/oauth-authorization-server/login/oauth.
 	for _, cand := range asCandidates(issuer) {
 		var asm struct {
-			Issuer                string `json:"issuer"`
-			AuthorizationEndpoint string `json:"authorization_endpoint"`
-			TokenEndpoint         string `json:"token_endpoint"`
-			RegistrationEndpoint  string `json:"registration_endpoint"`
+			Issuer                string   `json:"issuer"`
+			AuthorizationEndpoint string   `json:"authorization_endpoint"`
+			TokenEndpoint         string   `json:"token_endpoint"`
+			RegistrationEndpoint  string   `json:"registration_endpoint"`
+			TokenAuthMethods      []string `json:"token_endpoint_auth_methods_supported"`
 		}
 		if getJSON(ctx, hc, cand, &asm) == nil && asm.TokenEndpoint != "" {
 			cfg.Issuer = firstNonEmpty(asm.Issuer, issuer)
 			cfg.AuthorizationEndpoint = asm.AuthorizationEndpoint
 			cfg.TokenEndpoint = asm.TokenEndpoint
 			cfg.RegistrationEndpoint = asm.RegistrationEndpoint
+			// Which client-auth method this provider takes is ITS choice, not ours. Prefer Basic when it
+			// is on offer: the RFC makes Basic mandatory for servers and leaves the body form optional.
+			cfg.TokenAuthMethod = pickTokenAuth(asm.TokenAuthMethods)
 			return cfg, nil
 		}
 	}
@@ -333,6 +402,9 @@ func (c Config) AuthCodeURL(redirectURI, state, challenge string) string {
 	if len(c.Scopes) > 0 {
 		q.Set("scope", strings.Join(c.Scopes, " "))
 	}
+	for k, v := range c.AuthorizeParams { // provider-specific: audience, access_type, prompt, user_scope…
+		q.Set(k, v)
+	}
 	sep := "?"
 	if strings.Contains(c.AuthorizationEndpoint, "?") {
 		sep = "&"
@@ -371,13 +443,82 @@ func (c Config) Refresh(ctx context.Context, hc *http.Client, refreshToken strin
 	return c.tokenRequest(ctx, hc, form)
 }
 
-func (c Config) tokenRequest(ctx context.Context, hc *http.Client, form url.Values) (Tokens, error) {
-	if c.ClientSecret != "" { // confidential client: authenticate the token request
-		form.Set("client_secret", c.ClientSecret)
+// Client authentication methods at the token endpoint (RFC 6749 §2.3). Which one a provider accepts is
+// PER-PROVIDER and advertised in `token_endpoint_auth_methods_supported`.
+const (
+	authBasic = "client_secret_basic" // secret in an HTTP Basic header. The RFC says servers MUST support it.
+	authPost  = "client_secret_post"  // secret in the form body. Optional per the RFC — but common.
+	authNone  = "none"                // public client: no secret, PKCE only.
+)
+
+// tokenAuthOrder is the client-authentication methods to attempt, best first.
+//
+// A public client (no secret) sends none. Otherwise we honour what the server ADVERTISED, and keep the
+// other method as a fallback: metadata is sometimes absent, stale, or simply wrong, and a provider that
+// rejects our first attempt with invalid_client will accept the other. Guessing one and giving up is how
+// you get an "OAuth works — except with Okta" bug.
+func (c Config) tokenAuthOrder() []string {
+	if c.ClientSecret == "" {
+		return []string{authNone}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenEndpoint, strings.NewReader(form.Encode()))
+	switch c.TokenAuthMethod {
+	case authBasic:
+		return []string{authBasic, authPost}
+	case authPost:
+		return []string{authPost, authBasic}
+	default: // undeclared: try the body first (widely accepted), then Basic (the mandatory one)
+		return []string{authPost, authBasic}
+	}
+}
+
+// tokenRequest posts to the token endpoint, retrying with the other client-auth method if the provider
+// rejects our credentials. Any NON-auth failure (bad grant, expired code) returns immediately — retrying
+// those would just replay a spent code.
+func (c Config) tokenRequest(ctx context.Context, hc *http.Client, form url.Values) (Tokens, error) {
+	var lastErr error
+	for _, method := range c.tokenAuthOrder() {
+		t, err := c.tokenRequestWith(ctx, hc, form, method)
+		if err == nil {
+			return t, nil
+		}
+		lastErr = err
+		if !isClientAuthError(err) {
+			return Tokens{}, err // not a credentials problem: do not retry
+		}
+	}
+	return Tokens{}, lastErr
+}
+
+// clientAuthErr marks a token-endpoint rejection of our CLIENT CREDENTIALS (as opposed to the grant), so
+// the caller knows the other auth method is worth trying.
+type clientAuthErr struct{ err error }
+
+func (e clientAuthErr) Error() string { return e.err.Error() }
+func (e clientAuthErr) Unwrap() error { return e.err }
+
+func isClientAuthError(err error) bool {
+	var e clientAuthErr
+	return errors.As(err, &e)
+}
+
+func (c Config) tokenRequestWith(ctx context.Context, hc *http.Client, form url.Values, method string) (Tokens, error) {
+	f := url.Values{}
+	for k, v := range form { // copy: a retry must not inherit the previous attempt's credentials
+		f[k] = v
+	}
+	for k, v := range c.TokenParams { // provider-specific (e.g. Auth0's audience)
+		f.Set(k, v)
+	}
+	if method == authPost && c.ClientSecret != "" {
+		f.Set("client_secret", c.ClientSecret)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.TokenEndpoint, strings.NewReader(f.Encode()))
 	if err != nil {
 		return Tokens{}, err
+	}
+	if method == authBasic && c.ClientSecret != "" {
+		// RFC 6749 §2.3.1: the credentials are form-urlencoded before base64, and travel in the header.
+		req.SetBasicAuth(url.QueryEscape(c.ClientID), url.QueryEscape(c.ClientSecret))
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -388,7 +529,12 @@ func (c Config) tokenRequest(ctx context.Context, hc *http.Client, form url.Valu
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode/100 != 2 {
-		return Tokens{}, fmt.Errorf("oauth: token endpoint %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		e := fmt.Errorf("oauth: token endpoint %d (%s): %s", resp.StatusCode, method, strings.TrimSpace(string(b)))
+		// 401, or an explicit invalid_client, means it refused our CREDENTIALS — the other method may work.
+		if resp.StatusCode == http.StatusUnauthorized || bytes.Contains(b, []byte("invalid_client")) {
+			return Tokens{}, clientAuthErr{e}
+		}
+		return Tokens{}, e
 	}
 	var raw struct {
 		AccessToken  string `json:"access_token"`
@@ -483,4 +629,27 @@ func safeName(s string) string {
 		return "_"
 	}
 	return b.String()
+}
+
+// pickTokenAuth chooses a client-authentication method from what the server advertises. Basic first (the
+// RFC-mandatory one), then the body form. An empty result means "undeclared" — tokenAuthOrder then tries
+// both rather than guessing.
+// kw: token endpoint auth method basic post negotiate
+func pickTokenAuth(supported []string) string {
+	has := func(m string) bool {
+		for _, s := range supported {
+			if s == m {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has(authBasic):
+		return authBasic
+	case has(authPost):
+		return authPost
+	default:
+		return ""
+	}
 }

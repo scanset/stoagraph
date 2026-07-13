@@ -1,0 +1,10 @@
+{
+  "_why": "access_type=offline is MANDATORY or Google issues NO refresh token -- the sign-in appears to succeed and the operator is silently logged out an hour later with no way back. prompt=consent forces it to re-issue one even if the user already granted access. This is the failure that motivated authorize_params.",
+  "client_id": "<from Google Cloud console>",
+  "client_secret": "<from Google Cloud console>",
+  "scopes": ["openid", "email"],
+  "authorize_params": {
+    "access_type": "offline",
+    "prompt": "consent"
+  }
+}

@@ -67,6 +67,7 @@ type ContextProvider struct {
 // kw: route tool recipe gate-arg binding
 type Route struct {
 	Tool    string
+	Server  string // WHICH MCP server serves this tool. The route delegates; the gate never infers.
 	Recipe  string
 	GateArg string
 }
@@ -260,9 +261,9 @@ func (s *Store) DeleteProvider(ctx context.Context, name string) error {
 // kw: put route upsert by tool
 func (s *Store) PutRoute(ctx context.Context, r Route) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO route(tool_name,recipe_name,gate_arg) VALUES(?,?,?)
-		 ON CONFLICT(tool_name) DO UPDATE SET recipe_name=excluded.recipe_name,gate_arg=excluded.gate_arg`,
-		r.Tool, r.Recipe, r.GateArg)
+		`INSERT INTO route(tool_name,server_name,recipe_name,gate_arg) VALUES(?,?,?,?)
+		 ON CONFLICT(tool_name) DO UPDATE SET server_name=excluded.server_name,recipe_name=excluded.recipe_name,gate_arg=excluded.gate_arg`,
+		r.Tool, r.Server, r.Recipe, r.GateArg)
 	if err != nil {
 		return fmt.Errorf("store: put route: %w", err)
 	}
@@ -271,7 +272,7 @@ func (s *Store) PutRoute(ctx context.Context, r Route) error {
 
 // kw: list routes ordered
 func (s *Store) ListRoutes(ctx context.Context) ([]Route, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT tool_name,recipe_name,gate_arg FROM route ORDER BY tool_name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT tool_name,server_name,recipe_name,gate_arg FROM route ORDER BY tool_name`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list routes: %w", err)
 	}
@@ -279,7 +280,7 @@ func (s *Store) ListRoutes(ctx context.Context) ([]Route, error) {
 	var out []Route
 	for rows.Next() {
 		var r Route
-		if err := rows.Scan(&r.Tool, &r.Recipe, &r.GateArg); err != nil {
+		if err := rows.Scan(&r.Tool, &r.Server, &r.Recipe, &r.GateArg); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

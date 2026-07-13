@@ -94,8 +94,8 @@ func TestStagProxyE2E(t *testing.T) {
 		}
 	}
 	must(st.PutMCPServer(ctx, store.MCPServer{Name: "pii-demo", Transport: "stdio", Target: py + " " + serverPy, Enabled: true}))
-	must(st.PutRoute(ctx, store.Route{Tool: "fetch_user_profile", Recipe: "internal_lookup_policy", GateArg: "user_id"}))
-	must(st.PutRoute(ctx, store.Route{Tool: "send_external_reply", Recipe: "external_reply_policy", GateArg: "message_body"}))
+	must(st.PutRoute(ctx, store.Route{Tool: "fetch_user_profile", Server: "pii-demo", Recipe: "internal_lookup_policy", GateArg: "user_id"}))
+	must(st.PutRoute(ctx, store.Route{Tool: "send_external_reply", Server: "pii-demo", Recipe: "external_reply_policy", GateArg: "message_body"}))
 	st.Close()
 	rs := recipestore.Store{Dir: recipesDir}
 	if _, err := rs.Save([]byte(internalRecipe)); err != nil {

@@ -126,7 +126,21 @@
       "layer": "binary",
       "package": "main",
       "path": "stoa-kernel/cmd/stag-proxy/main.go",
-      "symbols": []
+      "symbols": [
+        {
+          "kw": [
+            "await",
+            "fleet",
+            "connect",
+            "all",
+            "downstreams",
+            "multi-server",
+            "route-picks-server"
+          ],
+          "line": 226,
+          "name": "awaitFleet"
+        }
+      ]
     },
     {
       "doc": "Command stag-serve runs the HTTP API over the gating proxy (Planning/16) \u2014 the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording",
@@ -145,6 +159,25 @@
       "layer": "binary",
       "package": "main",
       "path": "stoa-kernel/cmd/stag-serve/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command stag-tools serves a DECLARED set of local commands to an agent as MCP tools.  This is how you give a model real local capability without ever giving it a shell.  stag-tools -config tools.yaml            # stdio  ",
+      "keywords": [
+        "cmd",
+        "stag-tools",
+        "local",
+        "tools",
+        "mcp",
+        "stdio",
+        "http",
+        "declared",
+        "no-shell",
+        "gate-able"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stag-tools/main.go",
       "symbols": []
     },
     {
@@ -735,6 +768,141 @@
       "package": "store",
       "path": "stoa-kernel/harness/store/store.go",
       "symbols": []
+    },
+    {
+      "doc": "Package localtools is the LOCAL TOOL SURFACE: a declared set of commands, served to an agent as MCP tools, so the model gets real local capability without ever getting a shell.  THE GUARDRAIL, and why this is a server ra",
+      "keywords": [
+        "local",
+        "tools",
+        "declared",
+        "command",
+        "script",
+        "placeholder",
+        "argv",
+        "no-shell",
+        "guardrail",
+        "mcp",
+        "stdio"
+      ],
+      "layer": "other",
+      "package": "localtools",
+      "path": "stoa-kernel/localtools/declare.go",
+      "symbols": [
+        {
+          "kw": [
+            "arg",
+            "declared",
+            "parameter",
+            "description",
+            "required"
+          ],
+          "line": 40,
+          "name": "Arg"
+        },
+        {
+          "kw": [
+            "tool",
+            "declared",
+            "name",
+            "description",
+            "command",
+            "script",
+            "args",
+            "cwd",
+            "timeout"
+          ],
+          "line": 49,
+          "name": "Tool"
+        },
+        {
+          "kw": [
+            "config",
+            "root",
+            "timeout",
+            "tools",
+            "env-allow"
+          ],
+          "line": 61,
+          "name": "Config"
+        },
+        {
+          "kw": [
+            "load",
+            "parse",
+            "validate",
+            "toolset",
+            "fail-closed"
+          ],
+          "line": 84,
+          "name": "Load"
+        },
+        {
+          "kw": [
+            "validate",
+            "guardrail",
+            "no-shell",
+            "argv0-authored",
+            "declared-args"
+          ],
+          "line": 108,
+          "name": "Validate"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "run",
+        "local",
+        "tool",
+        "exec",
+        "argv",
+        "substitute",
+        "no-shell",
+        "clean-env",
+        "timeout",
+        "truncate"
+      ],
+      "layer": "other",
+      "package": "localtools",
+      "path": "stoa-kernel/localtools/run.go",
+      "symbols": [
+        {
+          "kw": [
+            "result",
+            "output",
+            "exit-code",
+            "truncated",
+            "timed-out"
+          ],
+          "line": 24,
+          "name": "Result"
+        },
+        {
+          "kw": [
+            "run",
+            "substitute",
+            "argv",
+            "exec",
+            "clean-env",
+            "timeout"
+          ],
+          "line": 38,
+          "name": "Run"
+        },
+        {
+          "kw": [
+            "env",
+            "allowlist",
+            "scrub",
+            "secrets",
+            "local",
+            "tool"
+          ],
+          "line": 121,
+          "name": "env"
+        }
+      ]
     },
     {
       "doc": "Package adapterauth resolves a stored MCP server into the connect-time credential the gate injects downstream. It is the single place that maps the oauth scheme to a fresh bearer token (refreshing if needed); bearer, hea",
@@ -1517,6 +1685,37 @@
       "symbols": []
     },
     {
+      "doc": "",
+      "keywords": [
+        "oauth",
+        "lock",
+        "fallback",
+        "non-unix",
+        "single-process"
+      ],
+      "layer": "gate",
+      "package": "oauth",
+      "path": "stoa-kernel/stag/oauth/lock_other.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "oauth",
+        "cross-process",
+        "file",
+        "lock",
+        "flock",
+        "refresh",
+        "serialization",
+        "rotation"
+      ],
+      "layer": "gate",
+      "package": "oauth",
+      "path": "stoa-kernel/stag/oauth/lock_unix.go",
+      "symbols": []
+    },
+    {
       "doc": "Package oauth implements the downstream OAuth 2.1 authorization-code flow (PKCE + RFC 7591 dynamic client registration + RFC 8414/9728 metadata discovery) that the gate uses to obtain and refresh access tokens for OAuth-",
       "keywords": [
         "oauth",
@@ -1541,7 +1740,7 @@
             "client",
             "discovery"
           ],
-          "line": 40,
+          "line": 42,
           "name": "Config"
         },
         {
@@ -1552,7 +1751,7 @@
             "refresh",
             "expiry"
           ],
-          "line": 53,
+          "line": 73,
           "name": "Tokens"
         },
         {
@@ -1563,7 +1762,7 @@
             "tokens",
             "persisted"
           ],
-          "line": 62,
+          "line": 82,
           "name": "State"
         },
         {
@@ -1575,7 +1774,7 @@
             "save",
             "file"
           ],
-          "line": 75,
+          "line": 95,
           "name": "Store"
         },
         {
@@ -1586,7 +1785,7 @@
             "refresh",
             "connect"
           ],
-          "line": 112,
+          "line": 147,
           "name": "Bearer"
         },
         {
@@ -1598,7 +1797,7 @@
             "authorization-server",
             "well-known"
           ],
-          "line": 147,
+          "line": 212,
           "name": "Discover"
         },
         {
@@ -1609,7 +1808,7 @@
             "dynamic",
             "client"
           ],
-          "line": 278,
+          "line": 347,
           "name": "Register"
         },
         {
@@ -1620,7 +1819,7 @@
             "challenge",
             "s256"
           ],
-          "line": 309,
+          "line": 378,
           "name": "PKCE"
         },
         {
@@ -1632,7 +1831,7 @@
             "pkce",
             "resource"
           ],
-          "line": 322,
+          "line": 391,
           "name": "AuthCodeURL"
         },
         {
@@ -1642,7 +1841,7 @@
             "authorization-code",
             "token"
           ],
-          "line": 345,
+          "line": 417,
           "name": "Exchange"
         },
         {
@@ -1652,8 +1851,21 @@
             "token",
             "grant"
           ],
-          "line": 360,
+          "line": 432,
           "name": "Refresh"
+        },
+        {
+          "kw": [
+            "token",
+            "endpoint",
+            "auth",
+            "method",
+            "basic",
+            "post",
+            "negotiate"
+          ],
+          "line": 638,
+          "name": "pickTokenAuth"
         }
       ]
     },
@@ -1794,7 +2006,73 @@
       "layer": "gate",
       "package": "mcpgate",
       "path": "stoa-kernel/stag/proxy/mcpgate/discover.go",
-      "symbols": []
+      "symbols": [
+        {
+          "kw": [
+            "scrub",
+            "control-plane",
+            "env",
+            "stdio",
+            "subprocess",
+            "secret",
+            "leak"
+          ],
+          "line": 190,
+          "name": "scrubControlPlane"
+        }
+      ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "fleet",
+        "downstreams",
+        "multi-server",
+        "tool",
+        "owner",
+        "route",
+        "dispatch",
+        "ambiguous",
+        "fail-closed"
+      ],
+      "layer": "gate",
+      "package": "mcpgate",
+      "path": "stoa-kernel/stag/proxy/mcpgate/fleet.go",
+      "symbols": [
+        {
+          "kw": [
+            "downstream",
+            "name",
+            "session",
+            "tools"
+          ],
+          "line": 14,
+          "name": "Downstream"
+        },
+        {
+          "kw": [
+            "fleet",
+            "by-name",
+            "lookup",
+            "route-declares-server",
+            "no-inference"
+          ],
+          "line": 34,
+          "name": "Fleet"
+        },
+        {
+          "kw": [
+            "lookup",
+            "route",
+            "server",
+            "tool",
+            "declaration",
+            "fail-closed"
+          ],
+          "line": 57,
+          "name": "Lookup"
+        }
+      ]
     },
     {
       "doc": "Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17, Slice 0). It wires Model Context Protocol server/client handling to the transport-agnostic proxy.Gate: stag is an MCP SERVER to the agent ",
@@ -1869,7 +2147,7 @@
             "to",
             "route"
           ],
-          "line": 73,
+          "line": 77,
           "name": "Router"
         },
         {
@@ -1885,7 +2163,7 @@
             "satisfy",
             "this)"
           ],
-          "line": 76,
+          "line": 80,
           "name": "Sink"
         },
         {
@@ -1899,7 +2177,7 @@
             "fault",
             "approval-id"
           ],
-          "line": 81,
+          "line": 85,
           "name": "Decision"
         },
         {
@@ -1912,7 +2190,7 @@
             "approvals",
             "notify"
           ],
-          "line": 92,
+          "line": 96,
           "name": "Gate"
         },
         {
@@ -1925,7 +2203,7 @@
             "fail-closed",
             "approval-loop"
           ],
-          "line": 100,
+          "line": 104,
           "name": "Decide"
         }
       ]
@@ -2367,7 +2645,7 @@
             "reason",
             "unresolved"
           ],
-          "line": 24,
+          "line": 25,
           "name": "RouteError"
         },
         {
@@ -2376,7 +2654,7 @@
             "router",
             "errors"
           ],
-          "line": 31,
+          "line": 32,
           "name": "Resolved"
         },
         {
@@ -2388,7 +2666,7 @@
             "parse",
             "fail-closed"
           ],
-          "line": 37,
+          "line": 38,
           "name": "Build"
         }
       ]
@@ -2590,7 +2868,7 @@
             "error",
             "resolution"
           ],
-          "line": 15,
+          "line": 16,
           "name": "RouteView"
         }
       ]
@@ -3105,7 +3383,7 @@
             "db",
             "handle"
           ],
-          "line": 75,
+          "line": 76,
           "name": "Store"
         },
         {
@@ -3118,7 +3396,7 @@
             "no-migrations",
             "single-conn"
           ],
-          "line": 80,
+          "line": 81,
           "name": "Open"
         },
         {
@@ -3126,7 +3404,7 @@
             "close",
             "db"
           ],
-          "line": 95,
+          "line": 96,
           "name": "Close"
         },
         {
@@ -3140,7 +3418,7 @@
             "transaction",
             "atomic"
           ],
-          "line": 105,
+          "line": 106,
           "name": "PutMCPServer"
         },
         {
@@ -3153,7 +3431,7 @@
             "not-found",
             "fail-closed"
           ],
-          "line": 137,
+          "line": 138,
           "name": "GetMCPServer"
         },
         {
@@ -3163,7 +3441,7 @@
             "server",
             "ordered"
           ],
-          "line": 156,
+          "line": 157,
           "name": "toolsFor"
         },
         {
@@ -3175,7 +3453,7 @@
             "with",
             "tools"
           ],
-          "line": 175,
+          "line": 176,
           "name": "ListMCPServers"
         },
         {
@@ -3187,7 +3465,7 @@
             "tools",
             "transaction"
           ],
-          "line": 207,
+          "line": 208,
           "name": "DeleteMCPServer"
         },
         {
@@ -3196,7 +3474,7 @@
             "provider",
             "upsert"
           ],
-          "line": 223,
+          "line": 224,
           "name": "PutProvider"
         },
         {
@@ -3205,7 +3483,7 @@
             "providers",
             "ordered"
           ],
-          "line": 235,
+          "line": 236,
           "name": "ListProviders"
         },
         {
@@ -3213,7 +3491,7 @@
             "delete",
             "provider"
           ],
-          "line": 255,
+          "line": 256,
           "name": "DeleteProvider"
         },
         {
@@ -3224,7 +3502,7 @@
             "by",
             "tool"
           ],
-          "line": 261,
+          "line": 262,
           "name": "PutRoute"
         },
         {
@@ -3233,7 +3511,7 @@
             "routes",
             "ordered"
           ],
-          "line": 273,
+          "line": 274,
           "name": "ListRoutes"
         },
         {
@@ -3243,7 +3521,7 @@
             "by",
             "tool"
           ],
-          "line": 291,
+          "line": 292,
           "name": "DeleteRoute"
         }
       ]

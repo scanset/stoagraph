@@ -43,6 +43,10 @@ type Route struct {
 	RecipeHash string
 	GateArg    string
 	RecipeName string // for audit/approval display; not load-bearing
+	// Server is the MCP server this tool is dispatched to. It is part of the ROUTE, not something the
+	// gate works out from what happens to be connected: a route must mean the same thing tomorrow, when
+	// another server that also exposes this tool name has been registered.
+	Server string
 }
 
 // Approvals is the gate-side store for the human-approval loop (Stage 5). It is OPTIONAL: a nil

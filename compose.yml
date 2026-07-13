@@ -110,7 +110,9 @@ services:
       # the key here (from .env). A mounted secrets file is the thing we are trying to avoid.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    ports: ["8090:8090"]
+    # Host port 8092, container port 8090. 8090 is a common default (the OAuth test server wants it),
+    # and the orchestrator squatting on it kept colliding. Inside the network it is still :8090.
+    ports: ["${HARNESS_HOST_PORT:-8092}:8090"]
     volumes:
       - ./config:/app/config:ro # event_map.json + models.json — the GATE never sees this mount
     depends_on:
@@ -147,6 +149,34 @@ services:
     image: ghcr.io/scanset/stoagraph/console:${STOAGRAPH_VERSION:-latest}
     ports: ["3000:3000"]
     depends_on: [stag-serve, harness-serve]
+    restart: unless-stopped
+
+  # ------------------------------------------------- THE LOCAL TOOL SERVER
+  # Real local capability for the agent — search the code, read a file, run the checks — with no shell,
+  # ever. Its own container, and that is the point: THE MOUNT IS THE BLAST RADIUS. A tool can only touch
+  # what you mount here, so mount the workspace you mean and NOTHING that holds a credential.
+  #
+  # It holds no gate secret. Note the empty `environment:` — that is deliberate, not an oversight: a
+  # process holding STAG_DISPATCH_TOKEN could bind itself a session to ANY recipe, and a tool server is
+  # exactly the thing that must not be able to grant itself tools.
+  local-tools:
+    image: ghcr.io/scanset/stoagraph/local-tools:${STOAGRAPH_VERSION:-latest}
+    command: ["-config", "/app/tools.yaml", "-root", "/workspace", "-http", ":9300"]
+    volumes:
+      # Point TOOLS_WORKSPACE at YOUR project. Read-only: a tool that cannot write cannot corrupt.
+      - ${TOOLS_WORKSPACE:-./examples/local-tools}:/workspace:ro
+      - ${TOOLS_CONFIG:-./examples/local-tools/tools.yaml}:/app/tools.yaml:ro
+    environment: {} # NO gate secrets reach a tool server. Deliberately empty.
+    read_only: true # the rootfs is immutable; a popped tool has nowhere to persist
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:9300/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   # ------------------------------------------------ THE EXAMPLE DOWNSTREAM

@@ -203,7 +203,9 @@ export type MCPServerInput = {
 };
 export type OAuthStatus = { authorized: boolean; expiresAt?: string; hasRefresh?: boolean };
 export type ProviderView = { name: string; kind: string; config: string; enabled: boolean };
-export type RouteView = { tool: string; recipe: string; gateArg: string; valid: boolean; error?: string };
+// A route DELEGATES: it names the server that serves the tool. The gate never infers the server from
+// the tool name — another server exposing the same name must not be able to change an existing route.
+export type RouteView = { tool: string; server: string; recipe: string; gateArg: string; valid: boolean; error?: string };
 
 async function jget<T>(path: string): Promise<T> {
   const res = await authFetch(`${API}${path}`);
@@ -243,7 +245,7 @@ export const deleteProvider = (name: string) => jdelete(`/api/providers/${encode
 
 // routes (tool -> recipe bindings)
 export const listRoutes = () => jget<RouteView[]>("/api/routes");
-export const addRoute = (r: { tool: string; recipe: string; gateArg: string }) =>
+export const addRoute = (r: { tool: string; server: string; recipe: string; gateArg: string }) =>
   jpost<{ tool: string }>("/api/routes", r);
 export const deleteRoute = (tool: string) => jdelete(`/api/routes/${encodeURIComponent(tool)}`);
 

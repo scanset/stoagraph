@@ -22,10 +22,76 @@ type pendingOAuth struct {
 
 // serverOAuthConfig is the optional per-server hint (mcp_servers.oauth_config JSON) for providers that
 // do NOT support dynamic client registration and need a pre-registered client / explicit scopes.
+// serverOAuthConfig is a PROVIDER PROFILE: everything a provider might need beyond what discovery can
+// tell us, expressed as DATA on the server record (mcp_servers.oauth_config).
+//
+// The point is that adding a new provider must never require new code. A spec-compliant MCP server needs
+// none of this — discovery + dynamic registration handle it. This exists for the rest of the world:
+//
+//	no metadata document      -> set authorization_endpoint + token_endpoint (discovery is skipped)
+//	no dynamic registration   -> set client_id (+ client_secret)
+//	non-standard parameters   -> set authorize_params / token_params (Google's access_type=offline,
+//	                             Auth0's audience, Slack's user_scope…)
+//	fussy client auth         -> set token_auth_method
+//
+// Ship one of these per provider as a preset and the "adapter" for a new service is a JSON file.
 type serverOAuthConfig struct {
 	ClientID     string   `json:"client_id"`
 	ClientSecret string   `json:"client_secret"`
 	Scopes       []string `json:"scopes"`
+	Issuer       string   `json:"issuer"`
+
+	// Explicit endpoints. Setting authorization+token SKIPS discovery entirely — the escape hatch for a
+	// bespoke server that publishes no metadata at all.
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	RegistrationEndpoint  string `json:"registration_endpoint"`
+
+	TokenAuthMethod string            `json:"token_auth_method"` // client_secret_basic | client_secret_post | none
+	AuthorizeParams map[string]string `json:"authorize_params"`
+	TokenParams     map[string]string `json:"token_params"`
+}
+
+// apply overlays the operator's profile onto whatever discovery found. Discovery is the default; the
+// profile is the override — so a provider that lies in (or omits) its metadata can still be driven.
+func (oc serverOAuthConfig) apply(cfg oauth.Config) oauth.Config {
+	if oc.ClientID != "" {
+		cfg.ClientID = oc.ClientID
+	}
+	if oc.ClientSecret != "" {
+		cfg.ClientSecret = oc.ClientSecret
+	}
+	if len(oc.Scopes) > 0 {
+		cfg.Scopes = oc.Scopes
+	}
+	if oc.Issuer != "" {
+		cfg.Issuer = oc.Issuer
+	}
+	if oc.AuthorizationEndpoint != "" {
+		cfg.AuthorizationEndpoint = oc.AuthorizationEndpoint
+	}
+	if oc.TokenEndpoint != "" {
+		cfg.TokenEndpoint = oc.TokenEndpoint
+	}
+	if oc.RegistrationEndpoint != "" {
+		cfg.RegistrationEndpoint = oc.RegistrationEndpoint
+	}
+	if oc.TokenAuthMethod != "" {
+		cfg.TokenAuthMethod = oc.TokenAuthMethod
+	}
+	if len(oc.AuthorizeParams) > 0 {
+		cfg.AuthorizeParams = oc.AuthorizeParams
+	}
+	if len(oc.TokenParams) > 0 {
+		cfg.TokenParams = oc.TokenParams
+	}
+	return cfg
+}
+
+// selfDescribing reports whether the profile names both endpoints itself, in which case there is nothing
+// to discover — the provider serves no metadata and the operator has told us where everything lives.
+func (oc serverOAuthConfig) selfDescribing() bool {
+	return oc.AuthorizationEndpoint != "" && oc.TokenEndpoint != ""
 }
 
 func (s *Server) redirectURI() string { return s.PublicURL + oauth.CallbackPath }
@@ -51,25 +117,34 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errObj("oauth applies to http servers only"))
 		return
 	}
-	cfg, err := oauth.Discover(r.Context(), nil, sv.Target)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errObj("oauth discovery failed: "+err.Error()))
-		return
-	}
-	if sv.OAuthConfig != "" { // operator-provided client / scopes for non-DCR providers
-		var oc serverOAuthConfig
-		if json.Unmarshal([]byte(sv.OAuthConfig), &oc) == nil {
-			if oc.ClientID != "" {
-				cfg.ClientID = oc.ClientID
-			}
-			if oc.ClientSecret != "" {
-				cfg.ClientSecret = oc.ClientSecret
-			}
-			if len(oc.Scopes) > 0 {
-				cfg.Scopes = oc.Scopes
-			}
+	// The operator's PROFILE (if any). It is data, not code — see serverOAuthConfig.
+	var oc serverOAuthConfig
+	if sv.OAuthConfig != "" {
+		if jerr := json.Unmarshal([]byte(sv.OAuthConfig), &oc); jerr != nil {
+			writeJSON(w, http.StatusBadRequest, errObj("oauth config is not valid JSON: "+jerr.Error()))
+			return
 		}
 	}
+
+	// DISCOVERY FIRST, PROFILE OVER IT. A spec-compliant server needs no profile at all. A profile that
+	// names both endpoints describes a provider that publishes NO metadata, so there is nothing to
+	// discover and we must not fail trying — skip straight to the profile.
+	cfg := oauth.Config{Resource: sv.Target}
+	if !oc.selfDescribing() {
+		var derr error
+		if cfg, derr = oauth.Discover(r.Context(), nil, sv.Target); derr != nil {
+			writeJSON(w, http.StatusBadGateway, errObj("oauth discovery failed: "+derr.Error()))
+			return
+		}
+	}
+	cfg = oc.apply(cfg)
+
+	if cfg.AuthorizationEndpoint == "" || cfg.TokenEndpoint == "" {
+		writeJSON(w, http.StatusBadRequest, errObj(
+			"could not find this provider's OAuth endpoints — set authorization_endpoint and token_endpoint in the server's oauth config"))
+		return
+	}
+
 	cfg, err = oauth.Register(r.Context(), nil, cfg, s.redirectURI(), "StoaGraph ("+name+")")
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errObj(err.Error()))

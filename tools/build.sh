@@ -18,6 +18,6 @@ done
 echo
 echo "  stag-serve     the GATE control plane + policy API (:8080)"
 echo "  stag-proxy     the GATE — MCP gating proxy / session daemon (:8091)"
-echo "  harness-serve  the ORCHESTRATOR API — models, dispatch (:8090)"
+echo "  harness-serve  the ORCHESTRATOR API — models, dispatch (:8092)"
 echo "  kbserve        example context provider for the READ channel (:8095)"
 echo "  harness        minimal CLI orchestrator"
