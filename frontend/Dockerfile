@@ -24,7 +24,7 @@ COPY . .
 # The API bases are baked at build time (Next inlines NEXT_PUBLIC_*). Compose passes the addresses
 # the BROWSER will use — not the docker-network names, which a browser cannot resolve.
 ARG NEXT_PUBLIC_API_BASE=http://localhost:8080
-ARG NEXT_PUBLIC_HARNESS_API=http://localhost:8090
+ARG NEXT_PUBLIC_HARNESS_API=http://localhost:8092
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 ENV NEXT_PUBLIC_HARNESS_API=$NEXT_PUBLIC_HARNESS_API
 RUN npm run build
