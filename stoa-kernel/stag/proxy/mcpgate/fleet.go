@@ -15,6 +15,10 @@ type Downstream struct {
 	Name    string
 	Session *mcp.ClientSession
 	Tools   []*mcp.Tool
+	// Resources are the server's OWN resources, re-served by the gate as READ channel: labelled
+	// untrusted at origin and recorded, never denied. A server whose value is its resources (a repo, a
+	// wiki, a doc set) is otherwise invisible to the agent through a tools-only gate.
+	Resources []*mcp.Resource
 }
 
 // Fleet is every connected downstream, addressed BY NAME.
@@ -64,6 +68,16 @@ func (f Fleet) Lookup(server, tool string) (Downstream, *mcp.Tool, error) {
 		return Downstream{}, nil, fmt.Errorf("server %q does not expose a tool named %q", server, tool)
 	}
 	return d, t, nil
+}
+
+// Downstreams returns every connected downstream, ordered by name so the advertised surface is stable.
+// kw: downstreams all ordered
+func (f Fleet) Downstreams() []Downstream {
+	out := make([]Downstream, 0, len(f.byName))
+	for _, n := range f.Servers() {
+		out = append(out, f.byName[n])
+	}
+	return out
 }
 
 // Servers names the connected downstreams.

@@ -101,7 +101,7 @@
             "multi-server",
             "route-picks-server"
           ],
-          "line": 226,
+          "line": 227,
           "name": "awaitFleet"
         }
       ]
@@ -1715,6 +1715,38 @@
       ]
     },
     {
+      "doc": "Package argpath extracts the values a policy judges out of a tool call's RAW arguments.  A gateArg used to name a top-level argument, and the proxy read it with fmt.Sprint. That worked for strings and numbers and was mea",
+      "keywords": [
+        "gatearg",
+        "path",
+        "extract",
+        "json",
+        "leaf",
+        "scalar",
+        "array",
+        "wildcard",
+        "composite",
+        "fail-closed",
+        "structured-args"
+      ],
+      "layer": "gate",
+      "package": "argpath",
+      "path": "stoa-kernel/stag/proxy/argpath/argpath.go",
+      "symbols": [
+        {
+          "kw": [
+            "extract",
+            "path",
+            "values",
+            "deterministic",
+            "fail-closed"
+          ],
+          "line": 45,
+          "name": "Extract"
+        }
+      ]
+    },
+    {
       "doc": "",
       "keywords": [
         "mcp",
@@ -1734,6 +1766,33 @@
       "symbols": [
         {
           "kw": [
+            "http",
+            "auth",
+            "bearer",
+            "header",
+            "query",
+            "oauth",
+            "fail-closed",
+            "shared",
+            "streamable",
+            "sse"
+          ],
+          "line": 108,
+          "name": "httpAuth"
+        },
+        {
+          "kw": [
+            "resources",
+            "list",
+            "optional",
+            "non-fatal",
+            "tools-only"
+          ],
+          "line": 179,
+          "name": "listResources"
+        },
+        {
+          "kw": [
             "scrub",
             "control-plane",
             "env",
@@ -1742,7 +1801,7 @@
             "secret",
             "leak"
           ],
-          "line": 190,
+          "line": 227,
           "name": "scrubControlPlane"
         }
       ]
@@ -1782,7 +1841,7 @@
             "route-declares-server",
             "no-inference"
           ],
-          "line": 34,
+          "line": 38,
           "name": "Fleet"
         },
         {
@@ -1794,8 +1853,17 @@
             "declaration",
             "fail-closed"
           ],
-          "line": 57,
+          "line": 61,
           "name": "Lookup"
+        },
+        {
+          "kw": [
+            "downstreams",
+            "all",
+            "ordered"
+          ],
+          "line": 75,
+          "name": "Downstreams"
         }
       ]
     },
@@ -1895,12 +1963,13 @@
             "call",
             "name",
             "args",
+            "raw",
             "from",
             "the",
             "untrusted",
             "agent"
           ],
-          "line": 35,
+          "line": 37,
           "name": "ToolCall"
         },
         {
@@ -1913,7 +1982,7 @@
             "a",
             "tool"
           ],
-          "line": 41,
+          "line": 49,
           "name": "Route"
         },
         {
@@ -1925,7 +1994,7 @@
             "route",
             "unique-per-fleet"
           ],
-          "line": 89,
+          "line": 97,
           "name": "Router"
         },
         {
@@ -1941,7 +2010,7 @@
             "satisfy",
             "this)"
           ],
-          "line": 92,
+          "line": 100,
           "name": "Sink"
         },
         {
@@ -1955,7 +2024,7 @@
             "fault",
             "approval-id"
           ],
-          "line": 97,
+          "line": 105,
           "name": "Decision"
         },
         {
@@ -1968,7 +2037,7 @@
             "approvals",
             "notify"
           ],
-          "line": 108,
+          "line": 116,
           "name": "Gate"
         },
         {
@@ -1981,7 +2050,7 @@
             "fail-closed",
             "approval-loop"
           ],
-          "line": 116,
+          "line": 124,
           "name": "Decide"
         }
       ]
@@ -2647,8 +2716,20 @@
             "error",
             "resolution"
           ],
-          "line": 17,
+          "line": 18,
           "name": "RouteView"
+        },
+        {
+          "kw": [
+            "tool",
+            "schema",
+            "properties",
+            "argument",
+            "names",
+            "zero-arg"
+          ],
+          "line": 142,
+          "name": "toolArgNames"
         }
       ]
     },

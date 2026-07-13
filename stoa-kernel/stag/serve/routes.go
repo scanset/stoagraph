@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/router"
@@ -72,8 +73,8 @@ func (s *Server) handleRoutePut(w http.ResponseWriter, r *http.Request) {
 		Recipe  string `json:"recipe"`
 		GateArg string `json:"gateArg"`
 	}
-	if json.Unmarshal(body, &req) != nil || req.Tool == "" || req.Recipe == "" || req.GateArg == "" {
-		writeJSON(w, http.StatusBadRequest, errObj("route needs a tool, server, recipe, and gateArg"))
+	if json.Unmarshal(body, &req) != nil || req.Tool == "" || req.Recipe == "" {
+		writeJSON(w, http.StatusBadRequest, errObj("route needs a tool, server, and recipe"))
 		return
 	}
 	if req.Server == "" {
@@ -87,16 +88,73 @@ func (s *Server) handleRoutePut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errObj("unknown MCP server: "+req.Server))
 		return
 	}
-	if len(sv.Tools) > 0 && !slices.ContainsFunc(sv.Tools, func(t store.MCPTool) bool { return t.Name == req.Tool }) {
+	decl, known := findTool(sv.Tools, req.Tool)
+	if len(sv.Tools) > 0 && !known {
 		writeJSON(w, http.StatusBadRequest, errObj(
 			"server "+req.Server+" does not expose a tool named "+req.Tool))
 		return
+	}
+
+	// An EMPTY gateArg means "this tool has no argument for the policy to judge" — the route itself is
+	// the authorization, and the recipe still decides (a benign sink allows; an authoritative one can
+	// still deny or escalate). That is how a zero-argument tool like `get_me` becomes routable at all.
+	//
+	// It is allowed ONLY when the tool genuinely takes no arguments. If the tool HAS arguments, an empty
+	// gateArg would forward every one of them unjudged — the exact fail-open an omission must never buy
+	// you. So we check the declared schema and refuse, naming the arguments the operator has to choose
+	// from. If the tool's schema is unknown (undiscovered server), we refuse too: we cannot prove the
+	// tool is argument-free, and an unprovable claim fails closed.
+	if req.GateArg == "" {
+		args, ok := toolArgNames(decl.InputSchema)
+		switch {
+		case !known || !ok:
+			writeJSON(w, http.StatusBadRequest, errObj(
+				"gateArg may only be empty for a tool with no arguments, and "+req.Tool+
+					"'s schema is not known — connect the server so its tools are discovered, or name the argument(s) to gate"))
+			return
+		case len(args) > 0:
+			writeJSON(w, http.StatusBadRequest, errObj(
+				"tool "+req.Tool+" takes arguments ("+strings.Join(args, ", ")+
+					") — name the one(s) the policy must judge in `gateArg`; an empty gateArg would forward them all unjudged"))
+			return
+		}
 	}
 	if err := s.Store.PutRoute(r.Context(), store.Route{Tool: req.Tool, Server: req.Server, Recipe: req.Recipe, GateArg: req.GateArg}); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errObj(err.Error()))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tool": req.Tool, "server": req.Server, "recipe": req.Recipe, "gateArg": req.GateArg})
+}
+
+// findTool locates a server's declaration of one tool.
+func findTool(tools []store.MCPTool, name string) (store.MCPTool, bool) {
+	i := slices.IndexFunc(tools, func(t store.MCPTool) bool { return t.Name == name })
+	if i < 0 {
+		return store.MCPTool{}, false
+	}
+	return tools[i], true
+}
+
+// toolArgNames reports the argument names a tool declares, from its JSON Schema. ok=false means the
+// schema could not be read at all — the caller must then fail closed rather than assume "no arguments".
+// A schema with no `properties` is a genuinely argument-free tool (ok=true, empty list).
+// kw: tool schema properties argument names zero-arg
+func toolArgNames(schema string) (names []string, ok bool) {
+	if strings.TrimSpace(schema) == "" {
+		return nil, false
+	}
+	var s struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal([]byte(schema), &s) != nil {
+		return nil, false
+	}
+	names = make([]string, 0, len(s.Properties))
+	for k := range s.Properties {
+		names = append(names, k)
+	}
+	slices.Sort(names) // deterministic error message
+	return names, true
 }
 
 // DELETE /api/routes/{server}/{tool}

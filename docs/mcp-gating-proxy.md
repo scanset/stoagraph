@@ -102,6 +102,14 @@ gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
   infers the server from a tool name, so adding a server cannot silently re-point a route you already
   wrote. Server names are therefore restricted to `[a-zA-Z0-9_-]` with no `__` (the advertised name is
   handed to a model, and the provider tool-use APIs reject anything else).
+- **Transports: stdio, `http` (streamable) and `sse` (legacy).** SSE is the older MCP remote transport
+  and much of the deployed ecosystem still speaks only that, so it is supported. Auth is identical
+  across both remote transports — it is a property of the HTTP hop, not of the framing over it.
+- **Downstream resources are served as READ channel.** A server whose value is its *resources* (a repo,
+  a wiki, a doc set) is not invisible to a tools-only gate: the gate re-serves them, namespaced as
+  `stag://mcp/<server>?uri=<original>`, stamped **untrusted at origin** and **recorded**. A read is
+  label+record and is never denied — reads inform the model, they do not authorize it. A server with no
+  resources is unaffected (`resources/list` failing is not an error worth refusing a connection over).
 - **`http` context providers.** The `rag` and `mcp_resource` provider kinds are reserved and fail closed
   (an unbuildable provider is dropped from the session, never fabricated). Keeping retrieval in a
   *downstream* provider is deliberate: it is what lets the gate stay model-free.

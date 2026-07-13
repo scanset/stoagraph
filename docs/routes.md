@@ -70,6 +70,40 @@ A route whose recipe is missing or fails the linter is **rejected at build** (`r
 as an error and does not install it), so a typo'd recipe name cannot silently open a tool. `GET
 /api/routes` reports each route's `valid` + `error`.
 
+## gateArg reaches into the payload
+
+A `gateArg` is a **path**, not just a top-level name. That matters because for a lot of real tools the
+scalars are the harmless part and the payload is where the risk lives — `push_files(owner, repo, files)`
+is not dangerous because of `owner`.
+
+```
+owner                 a top-level scalar
+issue_fields.title    a scalar inside an object
+files[].path          the `path` of EVERY element of the files array
+reviewers[]           every element of a scalar array
+```
+
+Two rules make this safe rather than merely convenient:
+
+- **Every selected value must clear.** A path crossing `[]` selects many values, and the call is
+  forwarded only if *all* of them pass. An array is not a way to slip one bad element past a rule the
+  other elements satisfy.
+- **A composite fails closed.** A path landing on an object or a bare array is **denied**, with a fault
+  telling you to name a scalar inside it. There is no honest way to ask "is this whole object in my
+  allowed set", so the gate refuses to pretend — it does not stringify it and compare against that.
+
+Absent values, `null`, and empty arrays all bind `""`, which no allow-set contains. A missing value is
+not a permissive one.
+
+## A tool with no arguments
+
+Leave `gateArg` empty. The **route itself is the authorization**: the recipe still runs and can still
+deny or escalate, there is simply no value to judge. This is what makes a zero-argument tool (GitHub's
+`get_me`, a `run_checks`) routable at all.
+
+An empty `gateArg` is accepted **only** when the tool genuinely declares no arguments. If the tool has
+arguments, the gate refuses and names them — an omission must never quietly forward a payload unjudged.
+
 ## gateArg — which arguments the policy sees
 
 `gateArg` names the argument(s) the recipe judges. It is either a single name, or a **comma-separated

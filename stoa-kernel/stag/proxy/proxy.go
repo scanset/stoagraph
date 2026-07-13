@@ -13,10 +13,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
 	stag "github.com/scanset/stoagraph/stoa-kernel/stag"
+	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/argpath"
 )
 
 // MetaApprovalToken is a gate-only argument the ORCHESTRATOR attaches on an approved retry: it
@@ -31,10 +33,16 @@ const MetaApprovalToken = "approval_token"
 // reaches the kernel, so it can't be presented to bypass the gate.
 const signedPlaceholder = "$approved"
 
-// kw: tool call name args from the untrusted agent
+// kw: tool call name args raw from the untrusted agent
 type ToolCall struct {
 	Tool string
+	// Args is every top-level argument, canonically rendered — used for the approval fingerprint and
+	// the human-facing audit, NOT for the gate decision.
 	Args map[string]string
+	// Raw is the arguments exactly as the agent sent them. The gate decides on values pulled OUT of
+	// this by path (see stag/proxy/argpath), so what the policy judges is the same JSON that is
+	// forwarded downstream — not a stringified impression of it.
+	Raw json.RawMessage
 }
 
 // kw: route recipe hash gated-arg for a tool
@@ -124,23 +132,23 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 		return d
 	}
 
-	// GateArg is one arg name (single-arg), or a comma-separated list (multi-arg): each listed
-	// arg binds a `propose out: <arg>` slot, so one recipe can decide from several arguments
-	// (e.g. "namespace,replicas"). A missing arg binds "" and fails its rule.
-	names := splitGateArg(route.GateArg)
-	args := make(map[string]string, len(names))
-	parts := make([]string, 0, len(names))
-	for _, a := range names {
-		args[a] = call.Args[a]
-		if a != MetaApprovalToken { // the token is a gate-only meta arg — never shown in the audit value
-			parts = append(parts, a+"="+args[a])
-		}
+	// GateArg is one PATH (single-arg), or a comma-separated list of them (multi-arg): each listed path
+	// binds a `propose out: <slot>` slot, so one recipe can decide from several arguments
+	// (e.g. "namespace,replicas"). A path may reach INTO the payload — `files[].path` — and may select
+	// several values, in which case every one of them must clear. See stag/proxy/argpath.
+	//
+	// An EMPTY GateArg means the tool takes no arguments to judge: the route is the authorization. One
+	// empty proposal is bound so the recipe still runs and can still deny or escalate.
+	slots, perr := g.gatedValues(route, call)
+	if perr != nil {
+		// A path that lands on an object, or on an array without [], cannot be judged. Denying is the
+		// only honest answer — the alternative is to stringify the composite and pretend a rule looked
+		// at it, which is the bug this replaced.
+		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Fault: perr.Error()}
+		g.record(ctx, d, route.RecipeName, route.RecipeHash)
+		return d
 	}
-	// Audit/human value: single-arg shows the raw value ("hello"); multi-arg shows "k=v k=v".
-	value := args[names[0]]
-	if strings.Contains(route.GateArg, ",") {
-		value = strings.Join(parts, " ")
-	}
+	value := auditValue(slots)
 
 	// STAGE 5: if the recipe has a signed_equality "$approved" gate, resolve it against the
 	// approval store. LookupApproved returns the human-minted token for this exact action iff it
@@ -159,11 +167,11 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 		recipe = resolveApproved(route.Recipe, token)
 	}
 
-	var res stag.EvalResult
-	if strings.Contains(route.GateArg, ",") {
-		res = stag.EvalArgs(recipe, args, route.RecipeHash)
-	} else {
-		res = stag.Eval(recipe, args[names[0]], route.RecipeHash) // single-arg binds the one proposal everywhere
+	res, everr := evalSlots(recipe, slots, route.RecipeHash, strings.Contains(route.GateArg, ","))
+	if everr != nil {
+		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Value: value, Fault: everr.Error()}
+		g.record(ctx, d, route.RecipeName, route.RecipeHash)
+		return d
 	}
 
 	// forward IFF the whole-recipe verdict is Allow. A Deny, an Escalate, or a Fault never
@@ -216,8 +224,165 @@ func (g Gate) record(ctx context.Context, d Decision, recipeName, recipeHash str
 	_ = g.Sink.Record(ctx, rec)
 }
 
-// splitGateArg parses a GateArg into its arg names: one name (single-arg) or a comma-separated
-// list (multi-arg). Empty entries are dropped; a single non-comma arg returns one name.
+// maxEvals bounds how many times one call may be evaluated. A gated path over an array is judged per
+// element, and two such paths multiply, so a hostile payload with a huge array is otherwise a way to
+// burn the gate's CPU. Past the bound we DENY: refusing to decide is the fail-closed answer, and no
+// legitimate policy needs to judge hundreds of values in one call.
+const maxEvals = 256
+
+// slot is one gated path, its recipe slot name, and every value the path selected.
+type slot struct {
+	name string   // the recipe's `propose out:` name (the path's last segment)
+	vals []string // one entry for a scalar path; N for a path crossing []
+}
+
+// gatedValues resolves each gated path against the call's RAW arguments.
+//
+// The values come out of the JSON the agent actually sent, so the gate judges the same bytes that get
+// forwarded. The old code read fmt.Sprint of a decoded map, which rendered a payload as Go memory
+// syntax and made it unjudgeable.
+func (g Gate) gatedValues(route Route, call ToolCall) ([]slot, error) {
+	// The package is transport-agnostic: an embedder that only has flat arguments may pass Args alone.
+	// Synthesize the document from them so a flat path still resolves. When Raw IS present (every MCP
+	// caller) it wins, because it is the exact JSON that will be forwarded.
+	raw := call.Raw
+	if len(raw) == 0 && len(call.Args) > 0 {
+		if b, err := json.Marshal(call.Args); err == nil {
+			raw = b
+		}
+	}
+
+	paths := splitGateArg(route.GateArg)
+	out := make([]slot, 0, len(paths))
+	for _, p := range paths {
+		if p == "" {
+			// no argument to judge — the route itself is the authorization
+			out = append(out, slot{name: "", vals: []string{""}})
+			continue
+		}
+		if p == MetaApprovalToken {
+			// the gate-only approval token is not in the tool's arguments schema; it rides alongside
+			out = append(out, slot{name: p, vals: []string{call.Args[MetaApprovalToken]}})
+			continue
+		}
+		vals, err := argpath.Extract(raw, p)
+		if err != nil {
+			return nil, fmt.Errorf("gate path: %w", err)
+		}
+		out = append(out, slot{name: slotName(p), vals: vals})
+	}
+	return out, nil
+}
+
+// slotName is the recipe slot a path binds: its last segment. `files[].path` proposes `path`, so a
+// recipe reads the way an author thinks ("the path of each file"), not the way the JSON is nested.
+func slotName(path string) string {
+	seg := path
+	if i := strings.LastIndex(path, "."); i >= 0 {
+		seg = path[i+1:]
+	}
+	return strings.TrimSuffix(seg, "[]")
+}
+
+// evalSlots runs the recipe over every combination of the selected values and ANDs the verdicts.
+//
+// A path over an array selects many values, and EVERY one must clear: an array is not a way to slip one
+// bad element past a rule the other elements satisfy. The rollup is conjunctive and fail-closed — any
+// Deny denies, any Escalate escalates, and only an all-Allow allows.
+func evalSlots(recipe stag.Recipe, slots []slot, hash string, multi bool) (stag.EvalResult, error) {
+	total := 1
+	for _, s := range slots {
+		total *= max(len(s.vals), 1)
+		if total > maxEvals {
+			return stag.EvalResult{}, fmt.Errorf("gate: %d value combinations exceeds the %d-evaluation bound — refusing to decide", total, maxEvals)
+		}
+	}
+
+	combos := cartesian(slots)
+	out := stag.EvalResult{Verdict: stag.Allow}
+	for i, c := range combos {
+		var r stag.EvalResult
+		if multi {
+			r = stag.EvalArgs(recipe, c, hash)
+		} else {
+			// single path: the one proposal binds everywhere in the recipe
+			r = stag.Eval(recipe, c[slots[0].name], hash)
+		}
+		if i == 0 {
+			out = r
+			continue
+		}
+		out.Verdict = andVerdict(out.Verdict, r.Verdict)
+		out.Events = append(out.Events, r.Events...)
+		if out.Fault == "" {
+			out.Fault = r.Fault
+		}
+	}
+	return out, nil
+}
+
+// cartesian expands the slots into every combination of their values, in a deterministic order.
+func cartesian(slots []slot) []map[string]string {
+	combos := []map[string]string{{}}
+	for _, s := range slots {
+		next := make([]map[string]string, 0, len(combos)*len(s.vals))
+		for _, base := range combos {
+			for _, v := range s.vals {
+				m := make(map[string]string, len(base)+1)
+				for k, bv := range base {
+					m[k] = bv
+				}
+				m[s.name] = v
+				next = append(next, m)
+			}
+		}
+		combos = next
+	}
+	return combos
+}
+
+// andVerdict is the fail-closed rollup: Deny beats Escalate beats Allow.
+func andVerdict(a, b stag.Verdict) stag.Verdict {
+	if a == stag.Deny || b == stag.Deny {
+		return stag.Deny
+	}
+	if a == stag.Escalate || b == stag.Escalate {
+		return stag.Escalate
+	}
+	if a == stag.Allow && b == stag.Allow {
+		return stag.Allow
+	}
+	return stag.Deny // any verdict we do not recognise is a deny
+}
+
+// auditValue renders what the gate judged, for the human record: the bare value for a single scalar,
+// "k=v k=v" across several, and a bracketed list when a path selected many.
+func auditValue(slots []slot) string {
+	if len(slots) == 1 && slots[0].name == "" {
+		return "" // no gated argument
+	}
+	if len(slots) == 1 {
+		return joinVals(slots[0].vals)
+	}
+	parts := make([]string, 0, len(slots))
+	for _, s := range slots {
+		if s.name == MetaApprovalToken {
+			continue // the gate-only token is never shown in the audit value
+		}
+		parts = append(parts, s.name+"="+joinVals(s.vals))
+	}
+	return strings.Join(parts, " ")
+}
+
+func joinVals(vs []string) string {
+	if len(vs) == 1 {
+		return vs[0]
+	}
+	return "[" + strings.Join(vs, " ") + "]"
+}
+
+// splitGateArg parses a GateArg into its paths: one path (single-arg) or a comma-separated
+// list (multi-arg). Empty entries are dropped; a single non-comma arg returns one path.
 func splitGateArg(gateArg string) []string {
 	out := make([]string, 0, 2)
 	for _, a := range strings.Split(gateArg, ",") {

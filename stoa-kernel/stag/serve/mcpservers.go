@@ -116,8 +116,10 @@ func (s *Server) handleMCPPut(w http.ResponseWriter, r *http.Request) {
 			`server name must match [a-zA-Z0-9_-]+ and must not contain "__" (it prefixes every tool name the agent sees)`))
 		return
 	}
-	if req.Transport != "stdio" && req.Transport != "http" {
-		writeJSON(w, http.StatusBadRequest, errObj(`transport must be "stdio" or "http"`))
+	// sse is the LEGACY MCP remote transport; a large part of the deployed ecosystem still speaks only
+	// that, so refusing it would put those servers out of reach for no good reason.
+	if req.Transport != "stdio" && req.Transport != "http" && req.Transport != "sse" {
+		writeJSON(w, http.StatusBadRequest, errObj(`transport must be "stdio", "http" (streamable) or "sse" (legacy)`))
 		return
 	}
 	scheme := req.AuthScheme

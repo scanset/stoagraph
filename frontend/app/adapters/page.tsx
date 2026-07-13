@@ -133,6 +133,8 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
   const selectCls = "rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2 py-1.5 text-[12px] text-[var(--text)]";
   // header + query carry a name field; bearer/header/query carry a secret; oauth carries neither
   // (its tokens come from the sign-in flow, held gate-side — you add the server, then click Sign in).
+  // auth is a property of the HTTP hop — it applies to streamable http AND legacy sse alike
+  const remote = transport === "http" || transport === "sse";
   const named = authScheme === "header" || authScheme === "query";
   const needsSecret = authScheme === "bearer" || authScheme === "header" || authScheme === "query";
   const isOAuth = authScheme === "oauth";
@@ -143,14 +145,15 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
         <Input placeholder="name" value={name} onChange={(e) => setName(e.target.value)} />
         <select value={transport} onChange={(e) => setTransport(e.target.value)} className={selectCls}>
           <option value="stdio">stdio</option>
-          <option value="http">http</option>
+          <option value="http">http (streamable)</option>
+          <option value="sse">sse (legacy)</option>
         </select>
         <Input
-          placeholder={transport === "stdio" ? "command (e.g. npx server-filesystem)" : "https://host/mcp"}
+          placeholder={transport === "stdio" ? "command (e.g. npx server-filesystem)" : transport === "sse" ? "https://host/sse" : "https://host/mcp"}
           value={target}
           onChange={(e) => setTarget(e.target.value)}
         />
-        {transport === "http" && (
+        {remote && (
           <select value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} className={selectCls} title="downstream auth — the gate holds the credential; the agent never sees it">
             <option value="none">no auth</option>
             <option value="bearer">bearer / token</option>
@@ -159,14 +162,14 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
             <option value="oauth">OAuth sign-in</option>
           </select>
         )}
-        {transport === "http" && named && (
+        {remote && named && (
           <Input
             placeholder={authScheme === "query" ? "param name (e.g. apikey)" : "header name (e.g. X-API-Key)"}
             value={authHeader}
             onChange={(e) => setAuthHeader(e.target.value)}
           />
         )}
-        {transport === "http" && needsSecret && (
+        {remote && needsSecret && (
           <>
             <Input placeholder="secret env var (preferred)" value={secretEnv} onChange={(e) => setSecretEnv(e.target.value)} />
             <input
@@ -178,7 +181,7 @@ function MCPServers({ servers, wrap }: { servers: MCPServerView[]; wrap: (fn: ()
             />
           </>
         )}
-        {transport === "http" && isOAuth && (
+        {remote && isOAuth && (
           <>
             {/* Providers WITHOUT dynamic client registration (GitHub, most big ones) need a client you
              * registered with them. Leave blank when the provider supports DCR — the gate registers itself. */}
@@ -463,9 +466,9 @@ function Routes({
             </option>
           ))}
         </select>
-        <Input placeholder="arg" value={gateArg} onChange={(e) => setGateArg(e.target.value)} />
+        <Input placeholder="arg / path (blank = no args)" value={gateArg} onChange={(e) => setGateArg(e.target.value)} />
         <AddBtn
-          disabled={!tool || !server || !recipe || !gateArg}
+          disabled={!tool || !server || !recipe}
           onClick={() =>
             wrap(async () => {
               await addRoute({ tool, server, recipe, gateArg });

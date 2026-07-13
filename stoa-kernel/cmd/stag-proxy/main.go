@@ -188,9 +188,10 @@ func main() {
 	die(err)
 	dauth, aerr := adapterauth.Resolve(ctx, oauthStore, nil, srv)
 	die(aerr)
-	session, tools, err := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
+	session, tools, resources, err := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
 	die(err)
 	defer session.Close()
+	_ = resources // stdio v1 serves a single downstream's tools; resources ride the fleet path below
 
 	// The global route table from the store; every connection shares it.
 	routes, err := st.ListRoutes(ctx)
@@ -242,15 +243,15 @@ func awaitFleet(ctx context.Context, st *store.Store, oauthStore oauth.Store, on
 				}
 				continue
 			}
-			session, tools, cerr := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
+			session, tools, resources, cerr := mcpgate.Connect(ctx, srv.Transport, srv.Target, dauth)
 			if cerr != nil {
 				if attempt == 0 {
 					log.Printf("downstream %q (%s: %s) unreachable: %v — skipping", srv.Name, srv.Transport, srv.Target, cerr)
 				}
 				continue
 			}
-			log.Printf("downstream %q connected (%s: %s, %d tools)", srv.Name, srv.Transport, srv.Target, len(tools))
-			downs = append(downs, mcpgate.Downstream{Name: srv.Name, Session: session, Tools: tools})
+			log.Printf("downstream %q connected (%s: %s, %d tools, %d resources)", srv.Name, srv.Transport, srv.Target, len(tools), len(resources))
+			downs = append(downs, mcpgate.Downstream{Name: srv.Name, Session: session, Tools: tools, Resources: resources})
 		}
 		if len(downs) > 0 {
 			return mcpgate.NewFleet(downs), downs
