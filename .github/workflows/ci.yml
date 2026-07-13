@@ -65,9 +65,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
 
-      - name: build the four Go services + the example downstream
+      - name: build the Go service images
         run: |
-          for cmd in stag-serve stag-proxy harness-serve kbserve example-pii; do
+          for cmd in stag-serve stag-proxy harness-serve; do
             echo "::group::$cmd"
             docker build --build-arg CMD="$cmd" -t "stoagraph-$cmd:ci" .
             echo "::endgroup::"
@@ -96,9 +96,8 @@ jobs:
 
       - name: build the images the SBOM describes
         run: |
-          for cmd in stag-serve stag-proxy harness-serve kbserve example-pii; do
-            svc="$cmd"; [ "$cmd" = "example-pii" ] && svc="pii-demo"
-            docker build --build-arg CMD="$cmd" -t "stoagraph-$svc:latest" .
+          for cmd in stag-serve stag-proxy harness-serve; do
+            docker build --build-arg CMD="$cmd" -t "stoagraph-$cmd:latest" .
           done
           docker build -t stoagraph-console:latest ./frontend
 

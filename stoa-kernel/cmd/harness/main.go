@@ -29,8 +29,8 @@ import (
 func main() {
 	modelID := flag.String("model", "claude-haiku-4-5", "Claude model id (the proposer)")
 	keyEnv := flag.String("key-env", "ANTHROPIC_API_KEY", "env var holding the API key")
-	proxyCmd := flag.String("proxy", "", "command that runs stag-proxy (the gating MCP server), e.g. '/tmp/stag-proxy -downstream pii-demo'")
-	system := flag.String("system", "You are a support agent. Use the available tools to help. Only send approved template ids in replies.", "system prompt (trusted)")
+	proxyCmd := flag.String("proxy", "", "command that runs stag-proxy (the gating MCP server), e.g. '/tmp/stag-proxy -downstream my-tools'")
+	system := flag.String("system", "You are an assistant. Use the available tools to help. Stay within the values the policy permits.", "system prompt (trusted)")
 	input := flag.String("input", "", "the task / event (untrusted)")
 	maxTurns := flag.Int("max-turns", 6, "max model<->tool round trips")
 	flag.Parse()

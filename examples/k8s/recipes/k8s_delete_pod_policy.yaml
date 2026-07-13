@@ -1,8 +1,0 @@
-recipe: k8s_delete_pod_policy
-version: 1
-# Deleting a pod (ephemeral) is allowed in dev/staging, denied elsewhere (prod-protected).
-rules:
-  ns.safe: {kind: set_membership, set: ["dev", "staging"]}
-steps:
-  - {id: propose_ns, kind: propose, out: ns}
-  - {id: del, kind: sink, in: ns, field: k8s.delete_pod, sensitivity: authoritative, rule: ns.safe, actor: "policy:platform"}

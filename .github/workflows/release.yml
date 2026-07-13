@@ -23,7 +23,7 @@ jobs:
   check:
     uses: ./.github/workflows/ci.yml
 
-  # Six multi-arch images, signed, with an SBOM attached as an attestation.
+  # Four multi-arch images, signed, with an SBOM attached as an attestation.
   #
   # Signing matters more than usual here: the whole product asks people to move trust from "the model
   # behaved" to "the gate enforced it". That argument collapses if you cannot verify the gate you are
@@ -41,8 +41,6 @@ jobs:
           - { service: stag-serve, cmd: stag-serve, context: ".", file: Dockerfile }
           - { service: stag-proxy, cmd: stag-proxy, context: ".", file: Dockerfile }
           - { service: harness-serve, cmd: harness-serve, context: ".", file: Dockerfile }
-          - { service: kbserve, cmd: kbserve, context: ".", file: Dockerfile }
-          - { service: pii-demo, cmd: example-pii, context: ".", file: Dockerfile }
           - { service: console, cmd: "", context: ./frontend, file: ./frontend/Dockerfile }
     steps:
       - uses: actions/checkout@v4

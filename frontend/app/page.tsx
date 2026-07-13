@@ -1,7 +1,7 @@
 "use client";
 
 import { isLoggedIn } from "./lib/session";
-import { isGateEmpty } from "./lib/demo";
+import { isGateEmpty } from "./lib/gate";
 import GetStarted from "./components/GetStarted";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -93,7 +93,7 @@ export default function Page() {
       <Topbar connected={connected} authed={authed} policy={policy} />
       <div className="flex-1 overflow-auto p-6">
         {showOnboarding ? (
-          <GetStarted onLoaded={load} />
+          <GetStarted />
         ) : (
           <>
             <DecideBar

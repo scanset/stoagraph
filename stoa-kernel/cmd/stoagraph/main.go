@@ -1,9 +1,8 @@
 // Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running,
-// authenticated gate with a working demo.
+// authenticated gate.
 //
 //	stoagraph up       mint the secrets, pull the signed images, start, print the login link
 //	stoagraph console  print the one-click login link again
-//	stoagraph demo     load the containment demo (no model or API key needed)
 //	stoagraph down     stop
 //
 // WHY THIS EXISTS AND NOT A `docker run` ONE-LINER: the control plane uses role-scoped secrets, and the
@@ -14,11 +13,10 @@
 // It holds no secrets itself: it writes .env (0600) and never transmits it anywhere.
 package main
 
-// file-kw: cli installer launcher up down demo console login-link compose ghcr role-secrets mint one-click
+// file-kw: cli installer launcher up down console login-link compose ghcr role-secrets mint one-click
 
 import (
 	"crypto/rand"
-	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -29,17 +27,6 @@ import (
 	"strings"
 	"time"
 )
-
-// The demo policy is EMBEDDED, not downloaded. `stoagraph demo` must not depend on GitHub being
-// reachable — and a demo that dies on a 404 is a first impression you do not get back. These are byte
-// copies of examples/pii-demo/recipes/; tools/check.sh fails if they drift, so there is still one
-// source of truth.
-//
-//go:embed recipes/internal_lookup_policy.yaml
-var recipeInternalLookup []byte
-
-//go:embed recipes/external_reply_policy.yaml
-var recipeExternalReply []byte
 
 // Version is stamped at build time (-ldflags "-X main.Version=v0.1.0"). It pins BOTH the images we pull
 // and the compose file we fetch, so an install is reproducible instead of "whatever main looked like".
@@ -58,8 +45,6 @@ func main() {
 		err = up()
 	case "down":
 		err = compose("down")
-	case "demo":
-		err = demo()
 	case "console", "login", "url":
 		err = loginLink()
 	case "version":
@@ -78,7 +63,6 @@ func usage() {
 
   stoagraph up       mint secrets, pull the images, start, print your one-click login link
   stoagraph console  print the login link again
-  stoagraph demo     load the containment demo (no model or API key needed)
   stoagraph down     stop everything
   stoagraph version
 
@@ -146,68 +130,7 @@ func loginLink() error {
   Log in — open this once (the keys are in the # fragment; the console stores them and strips them):
 
     http://localhost:3000/#c=%s&o=%s
-
-  Then:  stoagraph demo      (watch an agent be stopped from leaking an SSN — no API key needed)
 `, console, operator)
-	return nil
-}
-
-// demo wires the containment example into the (deliberately empty) gate. The gate ships with NO policy
-// — a security control must not arrive already permitting something you never authored — so this is the
-// explicit "yes, I meant it" step.
-func demo() error {
-	tok, err := envToken("STAG_CONSOLE_TOKEN")
-	if err != nil {
-		return err
-	}
-	if err := get("http://localhost:8080/health"); err != nil {
-		return fmt.Errorf("the gate is not up — run: stoagraph up")
-	}
-
-	fmt.Println("== policy ==")
-	for _, r := range []struct {
-		name string
-		src  []byte
-	}{
-		{"internal_lookup_policy", recipeInternalLookup},
-		{"external_reply_policy", recipeExternalReply},
-	} {
-		if err := post("/api/recipes", tok, "text/plain", r.src); err != nil {
-			return err
-		}
-		fmt.Println("  ", r.name)
-	}
-
-	fmt.Println("== the tool server ==")
-	if err := post("/api/mcp-servers", tok, "application/json",
-		[]byte(`{"name":"pii-demo","transport":"http","target":"http://pii-demo:9000/mcp"}`)); err != nil {
-		return err
-	}
-
-	fmt.Println("== routes ==")
-	for _, r := range []string{
-		`{"tool":"fetch_user_profile","recipe":"internal_lookup_policy","gateArg":"user_id"}`,
-		`{"tool":"send_external_reply","recipe":"external_reply_policy","gateArg":"message_body"}`,
-	} {
-		if err := post("/api/routes", tok, "application/json", []byte(r)); err != nil {
-			return err
-		}
-	}
-
-	fmt.Print(`
-  Try it — no model, no API key:
-
-    fetch_user_profile(123)                          ALLOW   returns Alice's record, INCLUDING her SSN
-    send_external_reply("Your SSN is 000-12-3456")   DENY    never reaches the tool
-    send_external_reply("Hi Alice, you're unlocked") DENY    <- innocent, and STILL blocked
-    send_external_reply("tmpl:account_unlocked")     ALLOW   an approved template
-
-  The third line is the point: no free-form value can cross at all. The policy never scans for SSNs —
-  it permits four template ids. There is no clever phrasing that becomes an approved template id, which
-  is why a jailbroken model cannot get around it.
-
-  Watch it in the console: http://localhost:3000
-`)
 	return nil
 }
 
@@ -299,25 +222,6 @@ func get(url string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func post(path, token, ctype string, body []byte) error {
-	req, err := http.NewRequest("POST", "http://localhost:8080"+path, strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", ctype)
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("POST %s: HTTP %d: %s", path, resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	return nil
 }

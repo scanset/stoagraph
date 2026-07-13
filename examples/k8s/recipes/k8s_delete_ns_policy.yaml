@@ -1,8 +1,0 @@
-recipe: k8s_delete_ns_policy
-version: 1
-# Deleting a whole namespace is catastrophic — HARD DENY.
-rules:
-  never: {kind: set_membership, set: ["__never__"]}
-steps:
-  - {id: propose_ns, kind: propose, out: ns}
-  - {id: attempt, kind: sink, in: ns, field: k8s.delete_namespace, sensitivity: authoritative, rule: never, actor: "policy:platform"}

@@ -21,10 +21,6 @@ services:
     build:
       <<: *gate-build
       args: [CMD=harness-serve]
-  kbserve:
-    build:
-      <<: *gate-build
-      args: [CMD=kbserve]
   console:
     build:
       context: ./frontend
@@ -38,7 +34,3 @@ services:
       <<: *gate-build
       target: localtools # NOT distroless: a tool server must contain the commands it runs
       args: [CMD=stag-tools]
-  pii-demo:
-    build:
-      <<: *gate-build
-      args: [CMD=example-pii]

@@ -53,16 +53,6 @@ else
   printf '  – skipped (run: cd frontend && npm ci)\n'
 fi
 
-step "embedded demo policy matches examples/"
-# The CLI embeds the pii-demo recipes so `stoagraph demo` works offline. Two copies of a file is two
-# chances to be wrong, so the copy is checked rather than trusted.
-if diff -q examples/pii-demo/recipes/internal_lookup_policy.yaml stoa-kernel/cmd/stoagraph/recipes/internal_lookup_policy.yaml >/dev/null 2>&1 &&
-   diff -q examples/pii-demo/recipes/external_reply_policy.yaml  stoa-kernel/cmd/stoagraph/recipes/external_reply_policy.yaml  >/dev/null 2>&1; then
-  ok "embedded demo policy in sync"
-else
-  no "the CLI's embedded recipes have DRIFTED from examples/pii-demo/recipes/ — re-copy them"
-fi
-
 step "code index"
 # An index nobody maintains is a map that lies, and a lying map is worse than no map. Fails if a file
 # was added without a `// file-kw:` marker, or if the index was not rebuilt after a change.

@@ -1,8 +1,0 @@
-recipe: k8s_delete_deploy_policy
-version: 1
-# Deleting a deployment always ESCALATES to a human (destructive, no auto path).
-rules:
-  never: {kind: set_membership, set: ["__never__"]}
-steps:
-  - {id: propose_ns, kind: propose, out: ns}
-  - {id: approve, kind: gate, in: ns, rule: never, on_fail: escalate}

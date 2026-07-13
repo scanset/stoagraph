@@ -3,7 +3,6 @@
 #
 #   stag-serve  :8080   the GATE — policy, approvals, audit. No model. No keys.
 #   stag-proxy  :8091   the GATE — MCP gating proxy; sessions bound to a recipe.
-#   kbserve     :8095   example context provider (the READ channel's downstream).
 #   harness-serve :8092 the ORCHESTRATOR — models (KEYS live here), dispatch.
 #   console     :3000   the one console, talking to both backends.
 #
@@ -25,13 +24,9 @@ echo "== the GATE =="
 "$BIN/stag-serve" -addr :8080 >logs/stag-serve.log 2>&1 &
 wait_for http://localhost:8080/api/health "stag-serve :8080"
 
-"$BIN/stag-proxy" -downstream "${DOWNSTREAM:-k8s-ops}" -http :8091 >logs/stag-proxy.log 2>&1 &
+"$BIN/stag-proxy" ${DOWNSTREAM:+-downstream "$DOWNSTREAM"} -http :8091 >logs/stag-proxy.log 2>&1 &
 wait_for http://localhost:8091/health "stag-proxy :8091 (daemon)" || \
-  echo "    (no downstream registered yet? run tools/demo.sh)"
-
-echo "== the READ channel =="
-"$BIN/kbserve" -addr :8095 >logs/kbserve.log 2>&1 &
-wait_for http://localhost:8095/health "kbserve :8095"
+  echo "    (no MCP server registered yet? add one in the console, then bind a route)"
 
 echo "== the ORCHESTRATOR =="
 if [ ! -f config/models.json ]; then

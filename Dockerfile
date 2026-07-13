@@ -1,8 +1,8 @@
 # One Dockerfile, four images. Pass --build-arg CMD=<binary>; compose does this per service.
 #
-#   stag-serve  stag-proxy      the GATE          — no model, no keys
-#   harness-serve               the ORCHESTRATOR  — holds the model API keys
-#   kbserve                     an example context provider
+#   stag-serve  stag-proxy      the GATE               — no model, no keys
+#   harness-serve               the ORCHESTRATOR       — holds the model API keys
+#   stag-tools                  the local tool server  — built with --target localtools
 #
 # They are separate CONTAINERS on purpose, and it is not an aesthetic choice. The control-plane
 # secrets are per-role, and `approve` (which releases a held action) must never be reachable by the
