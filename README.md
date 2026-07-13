@@ -129,4 +129,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/developmen
 - [docs/mcp-gating-proxy.md](docs/mcp-gating-proxy.md) — how the gate speaks MCP.
 - [docs/docker.md](docs/docker.md) — containers, and why the secrets are split across them.
 - [examples/custom-tool/](examples/custom-tool/) — bring your own tool in ~5 minutes.
-- [planning/](planning/) — the full design record, including the decisions we got wrong.
