@@ -61,6 +61,34 @@ if out=$(bash tools/index.sh --check 2>&1); then ok "index current"; else no "in
 step "repo hygiene"
 if out=$(bash tools/hygiene.sh 2>&1); then ok "hygiene OK"; else no "hygiene FAILED:"; show "$out"; fi
 
+step "gate images are DISTROLESS (no shell)"
+# "Nothing to pivot to if a binary is ever popped" is a security claim, so verify it — do not assert it.
+#
+# This check exists because the claim was FALSE and nobody noticed: the Dockerfile's alpine tool-server
+# stage was last, and every caller (compose, ci, release) built without --target, so Docker built the
+# LAST stage. The gate shipped with a shell, git and ripgrep in it while the README, SECURITY.md and the
+# Dockerfile's own comments all said distroless. A claim with no test is a claim with a shelf life.
+#
+# Skipped (not failed) when the images are not built locally — CI builds them and runs the same assert.
+if ! command -v docker >/dev/null 2>&1; then
+  printf '  – skipped (docker not available)\n'
+else
+  missing=""; shelled=""
+  for svc in stag-serve stag-proxy harness-serve; do
+    img="ghcr.io/scanset/stoagraph/$svc:latest"
+    if ! docker image inspect "$img" >/dev/null 2>&1; then missing="$missing $svc"; continue; fi
+    # a distroless image has no /bin/sh, so this must FAIL to run
+    if docker run --rm --entrypoint /bin/sh "$img" -c 'exit 0' >/dev/null 2>&1; then shelled="$shelled $svc"; fi
+  done
+  if [ -n "$shelled" ]; then
+    no "NOT distroless — a shell runs in:$shelled (build with --target runtime)"
+  elif [ -n "$missing" ]; then
+    printf '  – skipped (not built:%s — run: docker compose build)\n' "$missing"
+  else
+    ok "no shell in any gate image"
+  fi
+fi
+
 echo
 [ "$fail" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; }
 echo "CHECKS FAILED"; exit 1

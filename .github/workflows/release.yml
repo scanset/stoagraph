@@ -23,7 +23,8 @@ jobs:
   check:
     uses: ./.github/workflows/ci.yml
 
-  # Four multi-arch images, signed, with an SBOM attached as an attestation.
+  # Five multi-arch images, signed, with an SBOM attached as an attestation. Five, not four: compose.yml
+  # pulls local-tools too, and it was missing here — so a tagged release still could not be run.
   #
   # Signing matters more than usual here: the whole product asks people to move trust from "the model
   # behaved" to "the gate enforced it". That argument collapses if you cannot verify the gate you are
@@ -38,10 +39,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - { service: stag-serve, cmd: stag-serve, context: ".", file: Dockerfile }
-          - { service: stag-proxy, cmd: stag-proxy, context: ".", file: Dockerfile }
-          - { service: harness-serve, cmd: harness-serve, context: ".", file: Dockerfile }
-          - { service: console, cmd: "", context: ./frontend, file: ./frontend/Dockerfile }
+          # `target` is load-bearing: with none, Docker builds the LAST stage of the Dockerfile. Every
+          # gate image must be `runtime` (distroless). local-tools is the one deliberate exception.
+          - { service: stag-serve, cmd: stag-serve, target: runtime, context: ".", file: Dockerfile }
+          - { service: stag-proxy, cmd: stag-proxy, target: runtime, context: ".", file: Dockerfile }
+          - { service: harness-serve, cmd: harness-serve, target: runtime, context: ".", file: Dockerfile }
+          # compose.yml pulls local-tools, so it MUST be published — it was missing from this matrix, so
+          # `docker compose up` would have 404'd on it even after a tagged release.
+          - { service: local-tools, cmd: stag-tools, target: localtools, context: ".", file: Dockerfile }
+          - { service: console, cmd: "", target: "", context: ./frontend, file: ./frontend/Dockerfile }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -68,6 +74,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: ${{ matrix.cmd != '' && format('CMD={0}', matrix.cmd) || '' }}

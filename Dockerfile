@@ -35,19 +35,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/healthc
 # root-owned and a nonroot service cannot create its own database.
 RUN mkdir -p /out/data
 
-# ---------- runtime ----------
-# distroless: no shell, no package manager, nonroot. Nothing to pivot to if a binary is ever popped —
-# which is also why the health probe is a static binary instead of `curl`.
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-WORKDIR /app
-
-COPY --from=build --chown=nonroot:nonroot /out/app         /app/stoagraph
-COPY --from=build --chown=nonroot:nonroot /out/healthcheck /app/healthcheck
-COPY --from=build --chown=nonroot:nonroot /out/data        /app/data
-
-USER nonroot:nonroot
-ENTRYPOINT ["/app/stoagraph"]
-
 # ---------- runtime: the LOCAL TOOL SERVER (build with --target localtools, CMD=stag-tools) ----------
 # This is the one image that is deliberately NOT distroless, and the reason is honest: a tool server
 # exists to RUN REAL COMMANDS, so the commands have to be in the image. `grep` cannot grep from an image
@@ -60,6 +47,12 @@ ENTRYPOINT ["/app/stoagraph"]
 #
 # What this container buys YOU is blast radius. The tools can only touch what you mount. Mount the
 # workspace, mount it read-only, and mount NOTHING that holds a credential — see compose.yml.
+#
+# IT IS DELIBERATELY NOT THE LAST STAGE. `docker build` with no --target builds the LAST stage, and this
+# one has a shell, git and ripgrep in it. When this sat at the bottom of the file, every caller that
+# forgot --target (compose.override.yml, ci.yml, release.yml — all of them) silently shipped the GATE on
+# alpine-with-a-shell while the comments, SECURITY.md and the README all said distroless. The safe image
+# must be the one you get by default; an unsafe default is a claim waiting to go quietly false.
 FROM alpine:3.20 AS localtools
 RUN apk add --no-cache git ripgrep && adduser -D -u 65532 nonroot
 WORKDIR /app
@@ -69,3 +62,20 @@ COPY --from=build --chown=nonroot:nonroot /out/healthcheck /app/healthcheck
 
 USER nonroot:nonroot
 ENTRYPOINT ["/app/stag-tools"]
+
+# ---------- runtime (DEFAULT) ----------
+# distroless: no shell, no package manager, nonroot. Nothing to pivot to if a binary is ever popped —
+# which is also why the health probe is a static binary instead of `curl`.
+#
+# LAST ON PURPOSE, so that this — the hardened image — is what a bare `docker build` produces. Callers
+# still pass --target runtime explicitly; this ordering is the belt to that braces. tools/check.sh
+# asserts the built gate images actually have no shell, because "we said distroless" is not evidence.
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+WORKDIR /app
+
+COPY --from=build --chown=nonroot:nonroot /out/app         /app/stoagraph
+COPY --from=build --chown=nonroot:nonroot /out/healthcheck /app/healthcheck
+COPY --from=build --chown=nonroot:nonroot /out/data        /app/data
+
+USER nonroot:nonroot
+ENTRYPOINT ["/app/stoagraph"]

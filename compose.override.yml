@@ -4,9 +4,13 @@
 # `build:` blocks, so in a clone `docker compose build` builds from source and `up` uses what you built.
 # It is not shipped in a release.
 
+# `target` is NOT optional. Without it, Docker builds the LAST stage of the Dockerfile — which is how
+# every gate image came to be built from the alpine tool-server stage (shell, git, ripgrep) while every
+# doc claimed distroless. Name the stage you mean.
 x-gate-build: &gate-build
   context: .
   dockerfile: Dockerfile
+  target: runtime
 
 services:
   stag-serve:
