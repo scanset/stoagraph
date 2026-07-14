@@ -19,6 +19,10 @@ Package auth is the control-plane authentication for stag (Planning/31): bearer 
 
 **kw:** control-plane · auth · bearer · roles · constant-time · fail-closed · tokens · dispatch · cannot · approve
 
+### `stoa-kernel/stag/egress/chain.go`
+
+**kw:** generic · hash-chain · tamper-evident · log · any-record · read · ingress · evidence · verify
+
 ### `stoa-kernel/stag/egress/egress.go`
 Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14): a hash-chained, tamper-evident JSONL event log behind the broker.EventSink seam, with NO keys and NO PKI. Each ReleaseEvent becomes one new
 
@@ -146,14 +150,15 @@ Package provider is the READ channel of the dual proxy (Planning/17/18): context
 
 **kw:** context · provider · read · channel · untrusted · gather · label-at-origin · fail-open · http · adapter
 
-- `ReadEvent` (:29) — read · event · audit · provider · query · items · sources · read-channel · crossing
-- `ContextItem` (:38) — context · item · source · text · trust · score
-- `ContextProvider` (:46) — context · provider · name · provide · query · items
-- `ProviderError` (:52) — provider · error · name · reason
-- `Gather` (:58) — gather · run · providers · stamp · untrusted · fail-open · per-provider
-- `HTTP` (:82) — http · provider · name · url · client · fetch · body · untrusted
-- `Name` (:89) — http · name
-- `Provide` (:92) — http · provide · get · url · query · param · body · one · item · data
+- `ReadEvent` (:34) — read · event · audit · provider · query · items · sources · read-channel · crossing
+- `Hash` (:55) — read · event · hash · evidence · content-addressed · chainable
+- `ContextItem` (:95) — context · item · source · text · trust · score
+- `ContextProvider` (:103) — context · provider · name · provide · query · items
+- `ProviderError` (:109) — provider · error · name · reason
+- `Gather` (:115) — gather · run · providers · stamp · untrusted · fail-open · per-provider
+- `HTTP` (:139) — http · provider · name · url · client · fetch · body · untrusted
+- `Name` (:146) — http · name
+- `Provide` (:149) — http · provide · get · url · query · param · body · one · item · data
 
 ### `stoa-kernel/stag/proxy/argpath/argpath.go`
 Package argpath extracts the values a policy judges out of a tool call's RAW arguments.  A gateArg used to name a top-level argument, and the proxy read it with fmt.Sprint. That worked for strings and numbers and was mea
@@ -184,6 +189,8 @@ Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17
 
 **kw:** mcp · adapter · gating · proxy · server · client · forward-iff-cleared · quarantined · tool · boundary
 
+- `SchemaArgs` (:106) — schema · args · properties · json-schema · top-level · bind-time · coverage
+
 ### `stoa-kernel/stag/proxy/naming.go`
 
 **kw:** tool · naming · namespace · advertised · server · prefix · collision · unambiguous · split · model-safe
@@ -204,6 +211,8 @@ Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agn
 - `Decision` (:105) — decision · tool · verdict · forward · value · events · fault · approval-id
 - `Gate` (:116) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
 - `Decide` (:124) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
+- `Covered` (:248) — coverage · accounted · gated · passthrough · top-level · heads
+- `CoverageGaps` (:292) — coverage · bind-time · schema · properties · unaccounted
 
 ### `stoa-kernel/stag/proxy/sessiond/sessiond.go`
 Package sessiond is the stag-proxy v2 daemon surface: a standing HTTP server where each MCP session is bound to a dispatcher-chosen recipe (Planning/24 v2, /25). The TRUSTED dispatcher POSTs /sessions to bind a session t
@@ -217,22 +226,24 @@ Package recipe is the recipe boundary: the only door through which authored YAML
 
 - `Header` (:25) — recipe · header · name · version
 - `Parsed` (:31) — parsed · recipe · compiled · registry · two · hashes
-- `Parse` (:47) — parse · strict · sign-time · warnings · are · errors
-- `ParseDraft` (:59) — parse · draft · warnings · returned
-- `errf` (:80) — line-anchored · error
-- `nameOK` (:88) — name · grammar · ascii · closed
-- `ruleIdOK` (:102) — rule · id · grammar · dotted · segments
-- `rawCase` (:119) — raw · step · intermediate
-- `Resolver` (:145) — resolver · composition · sub-recipe · source · by · name
-- `frontParse` (:323) — front-parse · prelims · decode · hygiene · schema · (no · cross-step · lint · — · finish · does · that)
-- `hygiene` (:586) — hygiene · walk · iterative · caps · anchors · aliases · merge · duplicate · keys · teaching
-- `strVal` (:661) — scalar · string · raw · text · tag · allowlist · templating
-- `quotedStr` (:680) — scalar · quoted · required · byte-exact
-- `intVal` (:692) — scalar · canonical · integer · kernel · predicate
-- `parseIngredient` (:704) — ingredient · origin · trust · closed · keys · value · unauthorable
-- `parseRule` (:741) — rule · registry · per-kind · required · forbidden · sorted · set
-- `parseStep` (:834) — step · per-kind · key · tables · vocabulary · foreach · exit · distinct
-- `lint` (:1028) — lint · declare-before-use · edges · reachability · guaranteed-deny · guarded · segment · dead · declarations
+- `Parse` (:57) — parse · strict · sign-time · warnings · are · errors
+- `ParseDraft` (:69) — parse · draft · warnings · returned
+- `errf` (:90) — line-anchored · error
+- `nameOK` (:98) — name · grammar · ascii · closed
+- `ruleIdOK` (:112) — rule · id · grammar · dotted · segments
+- `rawCase` (:129) — raw · step · intermediate
+- `Resolver` (:155) — resolver · composition · sub-recipe · source · by · name
+- `frontParse` (:338) — front-parse · prelims · decode · hygiene · schema · (no · cross-step · lint · — · finish · does · that)
+- `lintPassThrough` (:665) — passthrough · lint · contradiction · dead-declaration
+- `Cautions` (:693) — passthrough · caution · advisory · non-blocking · authoritative-looking
+- `hygiene` (:705) — hygiene · walk · iterative · caps · anchors · aliases · merge · duplicate · keys · teaching
+- `strVal` (:780) — scalar · string · raw · text · tag · allowlist · templating
+- `quotedStr` (:799) — scalar · quoted · required · byte-exact
+- `intVal` (:811) — scalar · canonical · integer · kernel · predicate
+- `parseIngredient` (:823) — ingredient · origin · trust · closed · keys · value · unauthorable
+- `parseRule` (:860) — rule · registry · per-kind · required · forbidden · sorted · set
+- `parseStep` (:953) — step · per-kind · key · tables · vocabulary · foreach · exit · distinct
+- `lint` (:1147) — lint · declare-before-use · edges · reachability · guaranteed-deny · guarded · segment · dead · declarations
 
 ### `stoa-kernel/stag/recipestore/recipestore.go`
 Package recipestore is the recipe-authoring core for the admin console: validate recipe YAML through the REAL parser + linter and persist valid recipes. Validate returns whether a draft parses, its lint error or warnings
@@ -330,11 +341,11 @@ Package stag is the public entry point to the StAG kernel: Eval, the recipe eval
 - `Case` (:125) — branch · case · closed · predicate · forward · edge
 - `Step` (:131) — recipe · step · propose · sink · branch · gate · forward-only · edges
 - `Recipe` (:149) — recipe · ingredients · steps
-- `SinkOutcome` (:155) — sink · outcome · verdict · per · sink
-- `GateOutcome` (:164) — gate · outcome · checkpoint · pass · fail · escalate
-- `EvalResult` (:172) — eval · result · verdict · sinks · gates · events · fault
-- `Eval` (:181) — eval · recipe · path · walk · forward-only · compose · kernel · invariant · foreach · single-arg
-- `EvalArgs` (:190) — eval · multi-arg · named · inputs · propose-by-name
+- `SinkOutcome` (:164) — sink · outcome · verdict · per · sink
+- `GateOutcome` (:173) — gate · outcome · checkpoint · pass · fail · escalate
+- `EvalResult` (:181) — eval · result · verdict · sinks · gates · events · fault
+- `Eval` (:190) — eval · recipe · path · walk · forward-only · compose · kernel · invariant · foreach · single-arg
+- `EvalArgs` (:199) — eval · multi-arg · named · inputs · propose-by-name
 
 ### `stoa-kernel/stag/store/approval.go`
 
@@ -411,6 +422,11 @@ Package dispatch routes an EVENT to a RECIPE, then (slice 2) binds a session and
 
 **kw:** wiring · stag-serve · catalog · routes-for-recipe · session · binder · daemon · post-sessions · token
 
+### `stoa-kernel/harness/ingress/ingress.go`
+Package ingress is the event front door (Planning/32): the quarantined adapters that turn a raw external delivery (an HTTP webhook today; a queue message later) into ONE canonical Envelope the dispatcher can route, plus 
+
+**kw:** event · ingress · envelope · adapter · hmac · attribution-not-content · quarantined · webhook · log · chained
+
 ### `stoa-kernel/harness/model/model.go`
 Package model is the proposer boundary: the untrusted agent side. A strategy seam that produces the proposal the kernel gates, conferring zero trust - a Proposal has nowhere to put trust, and Decide's verdict depends onl
 
@@ -448,6 +464,10 @@ Package store is the event_harness's own model-provider config: which models the
 
 **kw:** dispatch · ingress · event->recipe->session->agent · turnkey · governed-agent · sse · stream
 
+### `stoa-kernel/cmd/harness-serve/ingress.go`
+
+**kw:** webhook · ingress · receiver · hmac · verify · record · chained · lane-1 · dispatch · front-door
+
 ### `stoa-kernel/cmd/harness-serve/main.go`
 Command harness-serve is the ORCHESTRATOR's API: connect models, author the event map, and dispatch an event through the gate to a governed agent. It runs the agent tool-use loop and streams the transcript (model proposa
 
@@ -468,7 +488,7 @@ Command stag-proxy is the standing gating MCP server — the front door an agent
 
 **kw:** cmd · gate · mcp · gating · proxy · daemon · session-to-recipe · stdio · streamable-http · live-vs-ready · fail-closed · dispatch-role
 
-- `awaitFleet` (:227) — await · fleet · connect · all · downstreams · multi-server · route-picks-server
+- `awaitFleet` (:225) — await · fleet · connect · all · downstreams · multi-server · route-picks-server
 
 ### `stoa-kernel/cmd/stag-serve/main.go`
 Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording

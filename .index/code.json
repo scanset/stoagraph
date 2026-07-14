@@ -36,6 +36,25 @@
       "symbols": []
     },
     {
+      "doc": "",
+      "keywords": [
+        "webhook",
+        "ingress",
+        "receiver",
+        "hmac",
+        "verify",
+        "record",
+        "chained",
+        "lane-1",
+        "dispatch",
+        "front-door"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/harness-serve/ingress.go",
+      "symbols": []
+    },
+    {
       "doc": "Command harness-serve is the ORCHESTRATOR's API: connect models, author the event map, and dispatch an event through the gate to a governed agent. It runs the agent tool-use loop and streams the transcript (model proposa",
       "keywords": [
         "cmd",
@@ -101,7 +120,7 @@
             "multi-server",
             "route-picks-server"
           ],
-          "line": 227,
+          "line": 225,
           "name": "awaitFleet"
         }
       ]
@@ -341,6 +360,25 @@
       "layer": "orchestrator",
       "package": "dispatch",
       "path": "stoa-kernel/harness/dispatch/wiring.go",
+      "symbols": []
+    },
+    {
+      "doc": "Package ingress is the event front door (Planning/32): the quarantined adapters that turn a raw external delivery (an HTTP webhook today; a queue message later) into ONE canonical Envelope the dispatcher can route, plus ",
+      "keywords": [
+        "event",
+        "ingress",
+        "envelope",
+        "adapter",
+        "hmac",
+        "attribution-not-content",
+        "quarantined",
+        "webhook",
+        "log",
+        "chained"
+      ],
+      "layer": "orchestrator",
+      "package": "ingress",
+      "path": "stoa-kernel/harness/ingress/ingress.go",
       "symbols": []
     },
     {
@@ -712,6 +750,24 @@
       "layer": "gate",
       "package": "auth",
       "path": "stoa-kernel/stag/auth/auth.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "generic",
+        "hash-chain",
+        "tamper-evident",
+        "log",
+        "any-record",
+        "read",
+        "ingress",
+        "evidence",
+        "verify"
+      ],
+      "layer": "gate",
+      "package": "egress",
+      "path": "stoa-kernel/stag/egress/chain.go",
       "symbols": []
     },
     {
@@ -1624,8 +1680,20 @@
             "read-channel",
             "crossing"
           ],
-          "line": 29,
+          "line": 34,
           "name": "ReadEvent"
+        },
+        {
+          "kw": [
+            "read",
+            "event",
+            "hash",
+            "evidence",
+            "content-addressed",
+            "chainable"
+          ],
+          "line": 55,
+          "name": "Hash"
         },
         {
           "kw": [
@@ -1636,7 +1704,7 @@
             "trust",
             "score"
           ],
-          "line": 38,
+          "line": 95,
           "name": "ContextItem"
         },
         {
@@ -1648,7 +1716,7 @@
             "query",
             "items"
           ],
-          "line": 46,
+          "line": 103,
           "name": "ContextProvider"
         },
         {
@@ -1658,7 +1726,7 @@
             "name",
             "reason"
           ],
-          "line": 52,
+          "line": 109,
           "name": "ProviderError"
         },
         {
@@ -1671,7 +1739,7 @@
             "fail-open",
             "per-provider"
           ],
-          "line": 58,
+          "line": 115,
           "name": "Gather"
         },
         {
@@ -1685,7 +1753,7 @@
             "body",
             "untrusted"
           ],
-          "line": 82,
+          "line": 139,
           "name": "HTTP"
         },
         {
@@ -1693,7 +1761,7 @@
             "http",
             "name"
           ],
-          "line": 89,
+          "line": 146,
           "name": "Name"
         },
         {
@@ -1709,7 +1777,7 @@
             "item",
             "data"
           ],
-          "line": 92,
+          "line": 149,
           "name": "Provide"
         }
       ]
@@ -1884,7 +1952,21 @@
       "layer": "gate",
       "package": "mcpgate",
       "path": "stoa-kernel/stag/proxy/mcpgate/mcpgate.go",
-      "symbols": []
+      "symbols": [
+        {
+          "kw": [
+            "schema",
+            "args",
+            "properties",
+            "json-schema",
+            "top-level",
+            "bind-time",
+            "coverage"
+          ],
+          "line": 106,
+          "name": "SchemaArgs"
+        }
+      ]
     },
     {
       "doc": "",
@@ -2052,6 +2134,29 @@
           ],
           "line": 124,
           "name": "Decide"
+        },
+        {
+          "kw": [
+            "coverage",
+            "accounted",
+            "gated",
+            "passthrough",
+            "top-level",
+            "heads"
+          ],
+          "line": 248,
+          "name": "Covered"
+        },
+        {
+          "kw": [
+            "coverage",
+            "bind-time",
+            "schema",
+            "properties",
+            "unaccounted"
+          ],
+          "line": 292,
+          "name": "CoverageGaps"
         }
       ]
     },
@@ -2125,7 +2230,7 @@
             "are",
             "errors"
           ],
-          "line": 47,
+          "line": 57,
           "name": "Parse"
         },
         {
@@ -2135,7 +2240,7 @@
             "warnings",
             "returned"
           ],
-          "line": 59,
+          "line": 69,
           "name": "ParseDraft"
         },
         {
@@ -2143,7 +2248,7 @@
             "line-anchored",
             "error"
           ],
-          "line": 80,
+          "line": 90,
           "name": "errf"
         },
         {
@@ -2153,7 +2258,7 @@
             "ascii",
             "closed"
           ],
-          "line": 88,
+          "line": 98,
           "name": "nameOK"
         },
         {
@@ -2164,7 +2269,7 @@
             "dotted",
             "segments"
           ],
-          "line": 102,
+          "line": 112,
           "name": "ruleIdOK"
         },
         {
@@ -2173,7 +2278,7 @@
             "step",
             "intermediate"
           ],
-          "line": 119,
+          "line": 129,
           "name": "rawCase"
         },
         {
@@ -2185,7 +2290,7 @@
             "by",
             "name"
           ],
-          "line": 145,
+          "line": 155,
           "name": "Resolver"
         },
         {
@@ -2203,8 +2308,29 @@
             "does",
             "that)"
           ],
-          "line": 323,
+          "line": 338,
           "name": "frontParse"
+        },
+        {
+          "kw": [
+            "passthrough",
+            "lint",
+            "contradiction",
+            "dead-declaration"
+          ],
+          "line": 665,
+          "name": "lintPassThrough"
+        },
+        {
+          "kw": [
+            "passthrough",
+            "caution",
+            "advisory",
+            "non-blocking",
+            "authoritative-looking"
+          ],
+          "line": 693,
+          "name": "Cautions"
         },
         {
           "kw": [
@@ -2219,7 +2345,7 @@
             "keys",
             "teaching"
           ],
-          "line": 586,
+          "line": 705,
           "name": "hygiene"
         },
         {
@@ -2232,7 +2358,7 @@
             "allowlist",
             "templating"
           ],
-          "line": 661,
+          "line": 780,
           "name": "strVal"
         },
         {
@@ -2242,7 +2368,7 @@
             "required",
             "byte-exact"
           ],
-          "line": 680,
+          "line": 799,
           "name": "quotedStr"
         },
         {
@@ -2253,7 +2379,7 @@
             "kernel",
             "predicate"
           ],
-          "line": 692,
+          "line": 811,
           "name": "intVal"
         },
         {
@@ -2266,7 +2392,7 @@
             "value",
             "unauthorable"
           ],
-          "line": 704,
+          "line": 823,
           "name": "parseIngredient"
         },
         {
@@ -2279,7 +2405,7 @@
             "sorted",
             "set"
           ],
-          "line": 741,
+          "line": 860,
           "name": "parseRule"
         },
         {
@@ -2293,7 +2419,7 @@
             "exit",
             "distinct"
           ],
-          "line": 834,
+          "line": 953,
           "name": "parseStep"
         },
         {
@@ -2308,7 +2434,7 @@
             "dead",
             "declarations"
           ],
-          "line": 1028,
+          "line": 1147,
           "name": "lint"
         }
       ]
@@ -3078,7 +3204,7 @@
             "per",
             "sink"
           ],
-          "line": 155,
+          "line": 164,
           "name": "SinkOutcome"
         },
         {
@@ -3090,7 +3216,7 @@
             "fail",
             "escalate"
           ],
-          "line": 164,
+          "line": 173,
           "name": "GateOutcome"
         },
         {
@@ -3103,7 +3229,7 @@
             "events",
             "fault"
           ],
-          "line": 172,
+          "line": 181,
           "name": "EvalResult"
         },
         {
@@ -3119,7 +3245,7 @@
             "foreach",
             "single-arg"
           ],
-          "line": 181,
+          "line": 190,
           "name": "Eval"
         },
         {
@@ -3130,7 +3256,7 @@
             "inputs",
             "propose-by-name"
           ],
-          "line": 190,
+          "line": 199,
           "name": "EvalArgs"
         }
       ]
