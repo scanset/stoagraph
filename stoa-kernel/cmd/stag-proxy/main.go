@@ -14,15 +14,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"slices"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,25 +39,15 @@ import (
 	"github.com/scanset/stoagraph/stoa-kernel/stag/store"
 )
 
-// readRecorder returns a best-effort audit sink for READ crossings (Planning/30): one JSON line per
-// resources/read on a context provider. Reads are label+record, not release, so this is a plain
-// append log — separate from the hash-chained decisions log (which is only for cleared ACT crossings).
-// Concurrent sessions may read at once, so the write is mutex-guarded.
-func readRecorder(w io.Writer) func(context.Context, provider.ReadEvent) {
-	var mu sync.Mutex
+// readRecorder returns a best-effort audit sink for READ crossings (Planning/30): one HASH-CHAINED
+// leaf per resources/read on a context provider. What the model READ is evidence — the record
+// attests the provider, the bounded query, and the per-item content hashes — so the read log gets
+// the same tamper-evidence discipline as the ACT decision log (a separate chain, since it is a
+// separate evidence stream: reads are label+record, never release). Concurrent sessions may read at
+// once; Chain.Append is mutex-guarded internally.
+func readRecorder(chain *egress.Chain[provider.ReadEvent]) func(context.Context, provider.ReadEvent) {
 	return func(_ context.Context, ev provider.ReadEvent) {
-		rec := struct {
-			Kind string    `json:"kind"`
-			Time time.Time `json:"ts"`
-			provider.ReadEvent
-		}{Kind: "read", Time: time.Now(), ReadEvent: ev}
-		b, err := json.Marshal(rec)
-		if err != nil {
-			return
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		_, _ = w.Write(append(b, '\n'))
+		_ = chain.Append(ev) // best-effort, off the enforcement path (inv 9)
 	}
 }
 
@@ -116,9 +103,20 @@ func main() {
 		// DAEMON (v2): session→recipe over streamable HTTP. Sessions bring their OWN routes — the
 		// trusted dispatcher binds them via POST /sessions and the untrusted agent connects to
 		// /mcp/<token>. No global route table; the agent cannot choose its own recipe.
+		// READ log: a hash-chained evidence stream (resume from any existing chain, like the decisions
+		// log above). Verify the existing read log before appending, so a tampered read history is
+		// caught at startup rather than silently continued.
+		readPrev := egress.VerifyResult{}
+		if b, rerr := os.ReadFile(*readLogPath); rerr == nil && len(b) > 0 {
+			var vverr error
+			if readPrev, vverr = egress.VerifyChain[provider.ReadEvent](bytes.NewReader(b)); vverr != nil {
+				die(fmt.Errorf("read log %s failed verification (tamper?): %w", *readLogPath, vverr))
+			}
+		}
 		rf, err := os.OpenFile(*readLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		die(err)
 		defer rf.Close()
+		readChain := egress.ResumeChain[provider.ReadEvent](rf, readPrev.Head, readPrev.Count)
 		// CONTROL-PLANE AUTH (Planning/31): the daemon only CONSUMES tokens — it must never invent a
 		// secret nobody else knows, so a missing tokens file is fatal (start stag-serve first, or set
 		// STAG_DISPATCH_TOKEN). POST /sessions then requires the `dispatch` role.
@@ -151,7 +149,7 @@ func main() {
 			h := sessiond.Handler(reg, sessiond.Deps{
 				Sink: sink, Approvals: st, OnEscalate: onEscalate,
 				Fleet: fleet, LoadRecipe: recipes.Get,
-				RecordRead: readRecorder(rf),
+				RecordRead: readRecorder(readChain),
 				Auth:       an,
 			})
 			ready.Store(&h)

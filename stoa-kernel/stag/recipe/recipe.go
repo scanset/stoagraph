@@ -36,12 +36,22 @@ type Parsed struct {
 	SemanticHash string
 }
 
-// kw: caps size depth nodes
+// kw: caps size depth nodes passthrough
 const (
-	maxBytes = 65536
-	maxDepth = 32
-	maxNodes = 10000
+	maxBytes       = 65536
+	maxDepth       = 32
+	maxNodes       = 10000
+	maxPassThrough = 64
 )
+
+// authoritativeLooking names arguments that usually PARAMETERIZE an action's effect. Declaring one
+// as passthrough is legal — the operator may have a reason — but it is the kind of decision that
+// should be seen, so it warns. kw: passthrough lint authoritative-looking arg names
+var authoritativeLooking = map[string]bool{
+	"amount": true, "to": true, "recipient": true, "path": true, "cmd": true, "command": true,
+	"token": true, "key": true, "secret": true, "url": true, "host": true, "target": true,
+	"namespace": true, "replicas": true, "account": true, "account_number": true, "user": true,
+}
 
 // kw: parse strict sign-time warnings are errors
 func Parse(src []byte) (Parsed, error) {
@@ -161,6 +171,7 @@ type front struct {
 	ruleOrder   []string
 	registry    map[string]stag.ReleaseRule
 	steps       []rawStep
+	passthrough []string // tool args knowingly forwarded ungated (the coverage contract)
 }
 
 // Parse is Compose with no resolver (composition disabled). kw: parse strict
@@ -274,6 +285,10 @@ func (fr *front) splice(name string, site int, resolve Resolver, at *yaml.Node) 
 	for k, v := range cf.ingredients {
 		fr.ingredients[k] = v
 	}
+	// PassThrough is NOT namespaced: it names real tool arguments, not slots. A child's coverage
+	// contract is unioned into the parent's — the composed whole is what the gate enforces, and the
+	// parent's SemanticHash binds it.
+	fr.passthrough = unionSorted(fr.passthrough, cf.passthrough)
 	fr.ruleOrder = append(fr.ruleOrder, cf.ruleOrder...)
 	for k, v := range cf.registry {
 		fr.registry[k] = v
@@ -378,10 +393,36 @@ func frontParse(src []byte) (fr front, warns []string, err error) {
 	ruleOrder := []string{}
 	registry := map[string]stag.ReleaseRule{}
 	var steps []rawStep
+	var passthrough []string
 
 	for i := 0; i < len(root.Content); i += 2 {
 		k, v := root.Content[i], root.Content[i+1]
 		switch k.Value {
+		case "passthrough":
+			// The coverage contract: tool arguments this policy knowingly forwards UNGATED.
+			// Everything else the tool takes must be gated, or the call is denied (unaccounted).
+			if v.Kind != yaml.SequenceNode || len(v.Content) == 0 {
+				return front{}, nil, errf(v, "passthrough must be a non-empty sequence (omit the key to gate every argument)")
+			}
+			if len(v.Content) > maxPassThrough {
+				return front{}, nil, errf(v, "too many passthrough args: %d (max %d)", len(v.Content), maxPassThrough)
+			}
+			seen := map[string]bool{}
+			for _, an := range v.Content {
+				s, serr := quotedStr(an, "passthrough arg")
+				if serr != nil {
+					return front{}, nil, serr
+				}
+				if !nameOK(s) {
+					return front{}, nil, errf(an, "invalid passthrough arg %q (grammar: lowercase ascii, digits, _, max 64)", s)
+				}
+				if seen[s] {
+					return front{}, nil, errf(an, "duplicate passthrough arg %q", s)
+				}
+				seen[s] = true
+				passthrough = append(passthrough, s)
+			}
+			sort.Strings(passthrough) // canonical order: the hash must not depend on authoring order
 		case "recipe":
 			s, serr := strVal(v, "recipe name")
 			if serr != nil {
@@ -456,6 +497,7 @@ func frontParse(src []byte) (fr front, warns []string, err error) {
 		name: name, version: version,
 		ingOrder: ingOrder, ingredients: ingredients,
 		ruleOrder: ruleOrder, registry: registry, steps: steps,
+		passthrough: passthrough,
 	}, warns, nil
 }
 
@@ -473,10 +515,20 @@ func finish(fr front, warns []string, src []byte) (Parsed, []string, error) {
 		return Parsed{}, nil, lerr
 	}
 	warns = append(warns, lintWarns...)
+	warns = append(warns, lintPassThrough(fr.passthrough, steps)...)
 
 	// canonical form + the two hashes (decision 2): built from validated raw
 	// text, never from yaml-decoded values; rejected files never reach here.
 	form := map[string]any{"recipe": name, "version": version}
+	// The coverage contract is part of the policy IDENTITY: adding an argument to passthrough
+	// widens what crosses ungated, so it must move the SemanticHash the audit records.
+	if len(fr.passthrough) > 0 {
+		pt := make([]any, len(fr.passthrough))
+		for i, a := range fr.passthrough {
+			pt[i] = a
+		}
+		form["passthrough"] = pt
+	}
 	if len(ingOrder) > 0 {
 		im := map[string]any{}
 		for _, n := range ingOrder {
@@ -557,6 +609,9 @@ func finish(fr front, warns []string, src []byte) (Parsed, []string, error) {
 	if len(ingredients) > 0 {
 		compiled.Ingredients = ingredients
 	}
+	if len(fr.passthrough) > 0 {
+		compiled.PassThrough = fr.passthrough
+	}
 	for i, st := range steps {
 		out := stag.Step{
 			Id: st.id, Kind: st.kind, Out: st.out, In: st.in, As: st.as, Sensitivity: st.sens,
@@ -580,6 +635,70 @@ func finish(fr front, warns []string, src []byte) (Parsed, []string, error) {
 		ArtifactHash: hex.EncodeToString(sum[:]),
 		SemanticHash: semantic,
 	}, warns, nil
+}
+
+// unionSorted merges two arg-name lists into one sorted, deduplicated list (composition unions the
+// children's coverage contracts into the parent's). kw: passthrough union compose canonical
+func unionSorted(a, b []string) []string {
+	if len(b) == 0 {
+		return a
+	}
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, s := range append(append([]string{}, a...), b...) {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// lintPassThrough reports a coverage contract that is WRONG (not merely bold): an argument that is
+// both gated and declared passthrough. The gate wins, so the declaration is dead policy — the same
+// class as a rule on a benign sink. Sign-time strict turns this into an error, which is right: it
+// means the author believes something about their own policy that is not true.
+//
+// Whether a passthrough is *unwise* is a judgment, not an error — see Cautions.
+// kw: passthrough lint contradiction dead-declaration
+func lintPassThrough(passthrough []string, steps []rawStep) []string {
+	if len(passthrough) == 0 {
+		return nil
+	}
+	gated := map[string]bool{}
+	for _, st := range steps {
+		if st.kind == stag.NodePropose {
+			gated[st.out] = true
+		}
+	}
+	var warns []string
+	for _, a := range passthrough {
+		if gated[a] {
+			warns = append(warns, fmt.Sprintf("argument %q is both gated and declared passthrough (the gate wins; the declaration is dead)", a))
+		}
+	}
+	sort.Strings(warns)
+	return warns
+}
+
+// Cautions reports passthrough declarations a human should look at twice: an argument whose NAME
+// suggests it parameterizes the action's effect, forwarded ungated.
+//
+// This is deliberately NOT a lint warning. Sign-time strict makes warnings errors, and a name-based
+// heuristic must never be able to REFUSE a policy — an operator may have a real reason to wave
+// `path` through, and a blocklist of names is not the kind of thing that should be able to stop
+// them. It is an advisory the console and CLI surface; it never blocks a save.
+// kw: passthrough caution advisory non-blocking authoritative-looking
+func Cautions(p Parsed) []string {
+	var out []string
+	for _, a := range p.Recipe.PassThrough {
+		if authoritativeLooking[a] {
+			out = append(out, fmt.Sprintf("passthrough %q looks authoritative: this policy forwards it UNGATED, so nothing bounds its value", a))
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // kw: hygiene walk iterative caps anchors aliases merge duplicate keys teaching

@@ -14,6 +14,7 @@ import (
 // "$approved" placeholder from the approval store at eval time.
 const apprSrc = `recipe: appr_test
 version: 1
+passthrough: ["deployment"]
 rules:
   approved: {kind: signed_equality, signed: "$approved"}
   is_prod:  {kind: set_membership, set: ["prod"]}

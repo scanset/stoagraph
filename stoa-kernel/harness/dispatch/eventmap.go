@@ -30,6 +30,11 @@ type Definition struct {
 	Context []string `json:"context,omitempty"` // READ channel (Planning/30): the context providers this
 	//                                              session may read, by name (resolved to specs at bind).
 	//                                              Empty -> no READ channel.
+	RequireAttribution bool `json:"require_attribution,omitempty"` // ingress (Planning/32): only dispatch
+	//                                              this definition for an ATTRIBUTED event (verified channel).
+	//                                              An unattributed event that matches is NOT dispatched
+	//                                              (lane 2 validation is future) — the governing rule:
+	//                                              attribution upgrades routing, never content.
 }
 
 // EventMap is an ordered list of definitions; first match wins.

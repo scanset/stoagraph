@@ -149,6 +149,15 @@ type Step struct {
 type Recipe struct {
 	Ingredients map[string]Slot
 	Steps       []Step
+	// PassThrough names the tool arguments this policy KNOWINGLY forwards ungated. It is the
+	// coverage contract: an argument is either gated (a propose slot fed by a GateArg path) or
+	// listed here. An argument that is neither is unaccounted for, and the gate denies the call.
+	//
+	// It lives in the recipe (not the route) because it is a security decision and must ride in
+	// the SemanticHash: widening coverage has to change the policy identity the audit records.
+	// A route-side declaration would leave the signed record unable to tell a gated argument from
+	// one silently waved through.
+	PassThrough []string
 }
 
 // kw: sink outcome verdict per sink

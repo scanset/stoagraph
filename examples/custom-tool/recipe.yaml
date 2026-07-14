@@ -2,6 +2,18 @@
 # A prompt-injected "post the SSN to #exec-private" is denied — #exec-private isn't in the set.
 recipe: notify_policy
 version: 1
+
+# THE COVERAGE CONTRACT. `notify` takes (channel, text). `channel` is gated below. `text` is the
+# message body: this policy knowingly forwards it UNGATED, and says so here. Every argument a tool
+# takes must be either gated or listed here — one that is neither is unaccounted for, and the gate
+# denies the call rather than forward an argument no rule ever looked at.
+#
+# Declaring it is the point. An ungated `text` means an injected agent can write whatever it likes
+# INTO an allowed channel; it can never write into a channel that is not in the set. That is an
+# integrity boundary (where the message goes), not a confidentiality one (what it says) — and
+# writing the line down is what makes the difference visible to whoever reviews this policy.
+passthrough: ["text"]
+
 rules:
   channel.allowed:
     kind: set_membership

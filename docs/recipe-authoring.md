@@ -41,10 +41,24 @@ policy language auditable):
 | Kind | Passes when | Example |
 | --- | --- | --- |
 | `set_membership` | the value is one of a fixed set | `{kind: set_membership, set: ["dev", "staging"]}` |
-| `numeric_range` | the value is an integer in `[min, max]` (canonical form only) | `{kind: numeric_range, min: 0, max: 5}` |
+| `numeric_range` | the value is an **integer** in `[min, max]` (canonical form only) | `{kind: numeric_range, min: 0, max: 5}` |
 | `signed_equality` | the value byte-equals a pinned/approved value | `{kind: signed_equality, signed: "$approved"}` |
 
 To DENY everything, use an unsatisfiable set: `{kind: set_membership, set: ["__never__"]}`.
+
+> **`numeric_range` is integer-only, on purpose.** It requires canonical integer form (the accepted
+> set stays finite and enumerable, invariant 6), so a decimal like `45.50` does not pass and is
+> denied. It cannot express a money range (`0.00–10000.00`). For a monetary or otherwise-decimal
+> value, gate by equality to the authoritative amount (below), or express the range in integer minor
+> units (cents) if a range is truly what you need.
+
+> **A range is not integrity for a value the attacker can set.** If an attacker who has poisoned the
+> context can choose *any* value inside your range, the range does not protect the action — it just
+> bounds how bad the chosen value is. A refund `amount` gated `numeric_range {0, 10000}` still lets a
+> hijacked call send €9,999. Gate a value the attacker controls by **equality to the authoritative
+> source** (`set_membership` over the one verified value, or `signed_equality` against a signed
+> fact), not by a range, unless the range itself is the whole policy. This was found by replaying an
+> external red-team suite against the gate; see the project transcripts.
 
 ## Steps — the six node kinds
 
@@ -129,15 +143,68 @@ steps:
   - {id: exit_esc, kind: exit}
 ```
 
+## The coverage contract (`passthrough`)
+
+**Every argument a tool takes must be accounted for: gated, or declared.** An argument that is
+neither is *unaccounted for*, and the gate denies the call.
+
+This is complete mediation finished at the argument level. Gating the arguments you listed says
+nothing about the ones you didn't — and an unlisted argument is forwarded to the tool verbatim.
+A policy that gates `to` on `wire_transfer(to, amount)` looks complete: the tool is routed, the
+listed path clears, and *any* `amount` goes through.
+
+So a recipe declares what it knowingly forwards ungated:
+
+```yaml
+recipe: notify_policy
+version: 1
+passthrough: ["text"]        # notify(channel, text): `text` is the body, forwarded ungated
+rules:
+  channel.allowed: {kind: set_membership, set: ["support", "general", "incidents"]}
+steps:
+  - {id: p_ch, kind: propose, out: channel}
+  - {id: post, kind: sink, in: channel, field: notify.channel,
+     sensitivity: authoritative, rule: channel.allowed, actor: "policy:notify"}
+```
+
+`passthrough` is **not** an escape hatch, it is a signature. Two things enforce it:
+
+- **At bind**, the tool's own schema is checked against the policy. A schema argument that is
+  neither gated nor declared means the tool is **not advertised** — it stays unrouted, and unrouted
+  is denied. You cannot leave a hole you didn't know about.
+- **At decide**, the arguments the agent *actually sent* are checked. A permissive schema (or one
+  that simply lies) cannot smuggle an argument past the policy.
+
+**It lives in the recipe, not the route, because it is part of the policy's identity.** Adding an
+argument to `passthrough` changes the recipe's semantic hash, so the signed record can always tell a
+gated argument from one that was waved through. A route-side declaration would leave two different
+policies producing the same audit trail.
+
+**Declaring an authoritative-looking argument (`amount`, `path`, `to`, `cmd`) raises a caution** in
+the console and the CLI. It does not block the save — you may have a reason — but the reviewer sees
+it, which is the entire point of writing it down.
+
+**Honest scope:** this is an *integrity* control. It guarantees every argument that parameterizes an
+action was judged, or knowingly wasn't. It is not a confidentiality control: a gated argument can
+still carry information out within its allowed set, and a declared passthrough carries whatever the
+model puts in it. Bounding *where* an action lands is not the same as bounding *what it says*.
+
 ## Multiple arguments, and human approval
 
 - **Multi-argument gating** — route a tool to several arguments at once (e.g. `namespace,replicas`);
   each `propose out: X` binds the argument named `X`, so one recipe decides from the whole action
-  (e.g. "scaling *prod* escalates regardless of the count"). An argument you do NOT list is NOT judged —
-  see [routes.md](routes.md), which explains route bindings and the blast-radius trap that comes with
-  gating only the obvious argument.
+  (e.g. "scaling *prod* escalates regardless of the count"). A path may reach into the payload
+  (`files[].path`), and every value it selects must clear. Anything you do not gate must appear in
+  `passthrough` (above), or the call is denied.
 - **Human approval** — a `signed_equality` gate whose `signed:` value is `"$approved"` escalates until
   a human approves; approval mints a signed release for that exact action, and the retried call passes.
+  The approval fingerprint binds the **whole** action, including passthrough arguments — so a human
+  approving a `scale_deployment` sees the `deployment` even when the policy does not gate it.
+- **Conflict between two trusted sources** — when a workflow reads the same fact from two authoritative
+  places and they disagree (a claim document says one account, the verified record says another), do
+  not silently pick one. Gate the value with `on_fail: escalate` so the mismatch goes to a human with
+  the full recorded action, rather than denying abruptly or trusting the wrong source. Escalate *is*
+  the review path; there is no separate "conflict" verdict, and none is needed.
 
 ## Tips
 

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/provider"
@@ -56,6 +57,17 @@ func NewGatingServer(gate proxy.Gate, fleet Fleet, read ReadChannel) *mcp.Server
 			// reason; this is the belt.
 			continue
 		}
+		// COVERAGE, bind-time. The tool's own schema says which arguments it takes; the policy says
+		// which it judges. An argument in the schema that is neither gated nor declared passthrough is
+		// a hole the author did not know they left — so the tool is NOT advertised, which leaves it
+		// unrouted, which Decide denies. Better to refuse the whole tool than to offer one whose
+		// dangerous half nothing is watching.
+		//
+		// Decide re-checks coverage against the arguments actually SENT, so a permissive schema (or one
+		// that simply lies) cannot smuggle an argument past this.
+		if gaps := proxy.CoverageGaps(rt, SchemaArgs(decl.InputSchema)); len(gaps) > 0 {
+			continue
+		}
 		// Advertise under the namespaced name. Copy the declaration rather than renaming it in place:
 		// the fleet's *mcp.Tool is shared, and mutating it would rename the tool for every other reader.
 		ad := *decl
@@ -80,6 +92,37 @@ func NewGatingServer(gate proxy.Gate, fleet Fleet, read ReadChannel) *mcp.Server
 		}
 	}
 	return s
+}
+
+// SchemaArgs lists the top-level argument names a tool's JSON Schema declares.
+//
+// InputSchema is `any` in the MCP SDK (a JSON Schema object, however the downstream chose to encode
+// it), so this round-trips through JSON rather than type-asserting one representation. A schema we
+// cannot read yields NO names — which makes CoverageGaps empty, so bind does not refuse a tool over
+// an unparseable schema. That is deliberate: bind-time coverage is the EARLY check, and Decide still
+// enforces coverage against the arguments actually sent. An unreadable schema loses the early
+// warning, never the guarantee.
+// kw: schema args properties json-schema top-level bind-time coverage
+func SchemaArgs(schema any) []string {
+	if schema == nil {
+		return nil
+	}
+	b, err := json.Marshal(schema)
+	if err != nil {
+		return nil
+	}
+	var s struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(b, &s) != nil || len(s.Properties) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s.Properties))
+	for k := range s.Properties {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // resourceURIScheme namespaces a downstream's resources so two servers cannot collide on a URI, the
@@ -125,6 +168,7 @@ func downstreamResourceHandler(d Downstream, downstreamURI string, record func(c
 			}}
 			out = append(out, &lc)
 			ev.Sources = append(ev.Sources, c.URI)
+			ev.ItemHashes = append(ev.ItemHashes, provider.HashText(lc.Text)) // attest the served bytes
 		}
 		ev.Items = len(out)
 		if record != nil {
@@ -196,26 +240,31 @@ func contextTemplate(name string) *mcp.ResourceTemplate {
 // yields empty context (Gather is read-fail-open), reported in the ReadEvent, never a gate error.
 func contextHandler(p provider.ContextProvider, record func(context.Context, provider.ReadEvent)) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		q := queryParam(req.Params.URI)
+		// Bound the outbound query BEFORE it reaches the provider: `?q` is agent-influenced text
+		// flowing out, so an unbounded query is an exfiltration channel (the READ-side of the canary
+		// problem). The gate caps it and records that it did.
+		q, truncated := provider.BoundQuery(queryParam(req.Params.URI))
 		items, errs := provider.Gather(ctx, q, []provider.ContextProvider{p})
 
-		ev := provider.ReadEvent{Provider: p.Name(), Query: q, Items: len(items)}
+		ev := provider.ReadEvent{Provider: p.Name(), Query: q, Items: len(items), QueryTruncated: truncated}
 		for _, it := range items {
 			ev.Sources = append(ev.Sources, it.Source)
 		}
 		for _, e := range errs {
 			ev.Errors = append(ev.Errors, e.Provider+": "+e.Err)
 		}
-		if record != nil {
-			record(ctx, ev)
-		}
 
 		contents := make([]*mcp.ResourceContents, 0, len(items)+1)
 		for _, it := range items {
+			framed := contextFrame(it)
+			ev.ItemHashes = append(ev.ItemHashes, provider.HashText(framed)) // attest the exact bytes returned
 			contents = append(contents, &mcp.ResourceContents{
-				Text: contextFrame(it),
+				Text: framed,
 				Meta: mcp.Meta{"stag": map[string]any{"trust": provider.Untrusted, "source": it.Source, "score": it.Score}},
 			})
+		}
+		if record != nil {
+			record(ctx, ev) // record AFTER hashing the items, so the leaf attests what was served
 		}
 		if len(contents) == 0 {
 			// honest empty read — a non-nil content the SDK accepts; the label+record contract holds.

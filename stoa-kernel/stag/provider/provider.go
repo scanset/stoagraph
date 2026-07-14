@@ -10,12 +10,17 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
+	"unicode/utf8"
+
+	"github.com/scanset/stoagraph/stoa-kernel/stag/internal/record"
 )
 
 // Untrusted is the only trust class context ever carries — enforced by Gather.
@@ -31,7 +36,59 @@ type ReadEvent struct {
 	Query    string   `json:"query"`
 	Items    int      `json:"items"`
 	Sources  []string `json:"sources,omitempty"`
-	Errors   []string `json:"errors,omitempty"`
+	// ItemHashes is the sha256 (hex) of each returned item's text, in the order returned. It is what
+	// makes a read EVIDENCE rather than a count: the record attests the exact bytes the model saw, so
+	// "the agent read these facts" is verifiable, not merely asserted. A later re-read that returns
+	// different bytes produces a different hash.
+	ItemHashes []string `json:"item_hashes,omitempty"`
+	// QueryTruncated is set when the outbound query was capped before it reached the provider (the
+	// READ-side egress bound): the recorded Query is the capped value, and this flags that a longer
+	// one was refused.
+	QueryTruncated bool     `json:"query_truncated,omitempty"`
+	Errors         []string `json:"errors,omitempty"`
+}
+
+// Hash is the canonical hash of a read crossing, so the READ audit log can be hash-chained like the
+// decision log. It covers the provider, the (already-bounded) query, the item count and per-item
+// content hashes, the truncation flag, and any provider errors — everything that says WHAT was read.
+// kw: read event hash evidence content-addressed chainable
+func (e ReadEvent) Hash() (string, error) {
+	return record.CanonicalHash(map[string]any{
+		"provider":        e.Provider,
+		"query":           e.Query,
+		"items":           e.Items,
+		"sources":         e.Sources,
+		"item_hashes":     e.ItemHashes,
+		"query_truncated": e.QueryTruncated,
+		"errors":          e.Errors,
+	})
+}
+
+// HashText is the content hash of one returned item, for ReadEvent.ItemHashes. Exported so the gate
+// (mcpgate) hashes the exact text it frames and returns to the agent.
+func HashText(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
+// MaxQueryLen bounds the outbound context query (the READ-side egress channel). The `?q` on a
+// context read is agent-influenced text flowing OUT to the provider's endpoint; an unbounded query
+// is an exfiltration channel. The gate caps it to this many bytes before Gather and records whether
+// it truncated. This is the safe default ("bounded"); a per-binding "none"/"verbatim" policy is a
+// later refinement (Planning/33).
+const MaxQueryLen = 512
+
+// BoundQuery caps a query to MaxQueryLen bytes (on a UTF-8 boundary), returning the capped value and
+// whether it was truncated.
+func BoundQuery(q string) (string, bool) {
+	if len(q) <= MaxQueryLen {
+		return q, false
+	}
+	cut := MaxQueryLen
+	for cut > 0 && !utf8.RuneStart(q[cut]) {
+		cut--
+	}
+	return q[:cut], true
 }
 
 // kw: context item source text trust score

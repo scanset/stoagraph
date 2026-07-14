@@ -139,6 +139,19 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 	//
 	// An EMPTY GateArg means the tool takes no arguments to judge: the route is the authorization. One
 	// empty proposal is bound so the recipe still runs and can still deny or escalate.
+	// COVERAGE (the argument-level half of complete mediation). Gating the paths an author listed
+	// says nothing about the arguments they did NOT list — and an unlisted argument is forwarded
+	// verbatim. So every argument the agent actually sends must be ACCOUNTED for: gated (covered by
+	// a GateArg path) or declared passthrough in the recipe. An unaccounted argument denies the call.
+	//
+	// Without this, a policy that gates `to` on wire_transfer(to, amount) looks complete and lets any
+	// `amount` through. The tool is routed, the listed path clears, and the effect is unbounded.
+	if cerr := coverage(route, call); cerr != nil {
+		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Fault: cerr.Error()}
+		g.record(ctx, d, route.RecipeName, route.RecipeHash)
+		return d
+	}
+
 	slots, perr := g.gatedValues(route, call)
 	if perr != nil {
 		// A path that lands on an object, or on an array without [], cannot be judged. Denying is the
@@ -222,6 +235,94 @@ func (g Gate) record(ctx context.Context, d Decision, recipeName, recipeHash str
 		rec.Events = d.Events
 	}
 	_ = g.Sink.Record(ctx, rec)
+}
+
+// Covered reports the set of TOP-LEVEL argument names a route accounts for: the head segment of
+// every gated path, plus the recipe's declared passthrough list, plus the gate-only approval token
+// (which is never forwarded downstream).
+//
+// A path may reach into the payload — `files[].path` gates the *contents* of `files`, and the
+// top-level argument it accounts for is `files`. That is the right granularity for coverage: the
+// question is whether the argument was JUDGED at all, and a path into it means it was.
+// kw: coverage accounted gated passthrough top-level heads
+func Covered(route Route) map[string]bool {
+	acc := map[string]bool{MetaApprovalToken: true}
+	for _, p := range splitGateArg(route.GateArg) {
+		if h := headSegment(p); h != "" {
+			acc[h] = true
+		}
+	}
+	for _, a := range route.Recipe.PassThrough {
+		acc[a] = true
+	}
+	return acc
+}
+
+// headSegment is the top-level argument a gate path descends from: `files[].path` -> `files`.
+func headSegment(path string) string {
+	if path == "" {
+		return ""
+	}
+	seg := path
+	if i := strings.Index(path, "."); i >= 0 {
+		seg = path[:i]
+	}
+	return strings.TrimSuffix(seg, "[]")
+}
+
+// coverage denies a call carrying any argument the policy does not account for.
+//
+// This is decide-time enforcement, over the keys the agent ACTUALLY SENT — so it holds even when a
+// downstream's declared schema is permissive, lies, or allows additional properties. Bind-time
+// checks the schema (see CoverageGaps); this checks reality.
+func coverage(route Route, call ToolCall) error {
+	acc := Covered(route)
+	for _, k := range topLevelKeys(call) {
+		if !acc[k] {
+			return fmt.Errorf("argument %q is neither gated nor declared passthrough — the policy does not account for it", k)
+		}
+	}
+	return nil
+}
+
+// CoverageGaps reports the tool-schema arguments a route accounts for NEITHER by gating NOR by an
+// explicit passthrough declaration. Bind-time uses it to refuse a route whose policy has holes,
+// before any agent ever calls the tool. An empty result means the policy covers the whole schema.
+// kw: coverage bind-time schema properties unaccounted
+func CoverageGaps(route Route, schemaArgs []string) []string {
+	acc := Covered(route)
+	var gaps []string
+	for _, a := range schemaArgs {
+		if !acc[a] {
+			gaps = append(gaps, a)
+		}
+	}
+	sort.Strings(gaps)
+	return gaps
+}
+
+// topLevelKeys lists the argument names the agent sent, from the RAW JSON when present (the exact
+// bytes that would be forwarded) and from Args otherwise (a transport-agnostic embedder).
+func topLevelKeys(call ToolCall) []string {
+	if len(call.Raw) > 0 {
+		var m map[string]json.RawMessage
+		if json.Unmarshal(call.Raw, &m) == nil {
+			out := make([]string, 0, len(m))
+			for k := range m {
+				out = append(out, k)
+			}
+			sort.Strings(out) // deterministic: the FIRST unaccounted arg named is stable
+			return out
+		}
+		// Unparseable arguments are not a coverage question; gatedValues/argpath will fail closed.
+		return nil
+	}
+	out := make([]string, 0, len(call.Args))
+	for k := range call.Args {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // maxEvals bounds how many times one call may be evaluated. A gated path over an array is judged per
