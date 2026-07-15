@@ -50,12 +50,12 @@ Package egress is the v1 egress layer (rung 1 of the trust ladder, Planning/14):
 - `KeyID` (:49) — key · id · short · fingerprint · of · public · key
 - `Sign` (:55) — sign · checkpoint · ed25519 · deterministic · domain-separated
 - `VerifySigned` (:66) — verify · signed · checkpoint · chain · + · head · match · + · keyid · + · signature · fail-closed
-- `MarshalPrivate` (:123) — marshal · private · key · base64 · seed
-- `ParsePrivate` (:128) — parse · private · key · fail-closed · length
-- `MarshalPublic` (:137) — marshal · public · key · base64
-- `ParsePublic` (:142) — parse · public · key · fail-closed · length
-- `encodeKey` (:151) — encode · key · base64 · line
-- `decodeKey` (:156) — decode · key · base64 · length-check · fail-closed
+- `MarshalPrivate` (:150) — marshal · private · key · base64 · seed
+- `ParsePrivate` (:155) — parse · private · key · fail-closed · length
+- `MarshalPublic` (:164) — marshal · public · key · base64
+- `ParsePublic` (:169) — parse · public · key · fail-closed · length
+- `encodeKey` (:178) — encode · key · base64 · line
+- `decodeKey` (:183) — decode · key · base64 · length-check · fail-closed
 
 ### `stoa-kernel/stag/internal/gate/sinkgate.go`
 
@@ -150,15 +150,17 @@ Package provider is the READ channel of the dual proxy (Planning/17/18): context
 
 **kw:** context · provider · read · channel · untrusted · gather · label-at-origin · fail-open · http · adapter
 
-- `ReadEvent` (:34) — read · event · audit · provider · query · items · sources · read-channel · crossing
-- `Hash` (:55) — read · event · hash · evidence · content-addressed · chainable
-- `ContextItem` (:95) — context · item · source · text · trust · score
-- `ContextProvider` (:103) — context · provider · name · provide · query · items
-- `ProviderError` (:109) — provider · error · name · reason
-- `Gather` (:115) — gather · run · providers · stamp · untrusted · fail-open · per-provider
-- `HTTP` (:139) — http · provider · name · url · client · fetch · body · untrusted
-- `Name` (:146) — http · name
-- `Provide` (:149) — http · provide · get · url · query · param · body · one · item · data
+- `ReadEvent` (:38) — read · event · audit · provider · query · items · sources · read-channel · crossing
+- `Hash` (:59) — read · event · hash · evidence · content-addressed · chainable
+- `ContextItem` (:99) — context · item · source · text · trust · score
+- `ContextProvider` (:107) — context · provider · name · provide · query · items
+- `ProviderError` (:113) — provider · error · name · reason
+- `Gather` (:119) — gather · run · providers · stamp · untrusted · fail-open · per-provider
+- `HTTP` (:143) — http · provider · name · url · client · fetch · body · untrusted
+- `Name` (:150) — http · name
+- `Provide` (:153) — http · provide · get · url · query · param · body · one · item · data
+- `Name` (:210) — static · name
+- `Name` (:312) — skill · name
 
 ### `stoa-kernel/stag/proxy/argpath/argpath.go`
 Package argpath extracts the values a policy judges out of a tool call's RAW arguments.  A gateArg used to name a top-level argument, and the proxy read it with fmt.Sprint. That worked for strings and numbers and was mea
@@ -181,8 +183,9 @@ Package argpath extracts the values a policy judges out of a tool call's RAW arg
 
 - `Downstream` (:14) — downstream · name · session · tools
 - `Fleet` (:38) — fleet · by-name · lookup · route-declares-server · no-inference
-- `Lookup` (:61) — lookup · route · server · tool · declaration · fail-closed
-- `Downstreams` (:75) — downstreams · all · ordered
+- `Server` (:61) — fleet · server · by-name · accessor · mcp-resource
+- `Lookup` (:70) — lookup · route · server · tool · declaration · fail-closed
+- `Downstreams` (:84) — downstreams · all · ordered
 
 ### `stoa-kernel/stag/proxy/mcpgate/mcpgate.go`
 Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17, Slice 0). It wires Model Context Protocol server/client handling to the transport-agnostic proxy.Gate: stag is an MCP SERVER to the agent 
@@ -190,6 +193,10 @@ Package mcpgate is the quarantined MCP adapter for the gating proxy (Planning/17
 **kw:** mcp · adapter · gating · proxy · server · client · forward-iff-cleared · quarantined · tool · boundary
 
 - `SchemaArgs` (:106) — schema · args · properties · json-schema · top-level · bind-time · coverage
+
+### `stoa-kernel/stag/proxy/mcpgate/mcpresource.go`
+
+**kw:** mcp_resource · context · provider · proxy · downstream · resources · read · untrusted · quarantine · c4
 
 ### `stoa-kernel/stag/proxy/naming.go`
 
@@ -450,6 +457,11 @@ Package openai is the OpenAI-compatible proposer adapter: a model.Proposer that 
 - `chatRequest` (:40) — chat · request · model · max_tokens · messages · no · sampling · params
 - `chatResponse` (:47) — chat · response · served · model · choices · finish_reason · error
 - `Propose` (:61) — propose · chat · completions · untrusted · fail-closed · no · temperature
+
+### `stoa-kernel/harness/skill/skill.go`
+Package skill resolves a bound skill to a TRUST SLOT (Planning/33, C3). A skill is a content-addressed procedure bundle; the harness verifies its ed25519 signature against the OPERATOR's public key and, only if it verifi
+
+**kw:** skill · resolve · verify · ed25519 · trust-slot · system · input · signed · unsigned · tier · audit · clawhub
 
 ### `stoa-kernel/harness/store/store.go`
 Package store is the event_harness's own model-provider config: which models the orchestrator can drive, and where their keys live. This is the config that was removed from stag (the gate holds no keys) — it belongs HERE

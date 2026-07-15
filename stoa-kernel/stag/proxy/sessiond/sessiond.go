@@ -179,7 +179,15 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		// is DROPPED from the session and logged — fail closed, never fabricate a source.
 		providers := make([]provider.ContextProvider, 0, len(req.Context))
 		for _, c := range req.Context {
-			p, perr := provider.FromConfig(c.Name, c.Kind, c.Config)
+			var p provider.ContextProvider
+			var perr error
+			// mcp_resource needs a LIVE downstream session, which only the fleet holds — so it is
+			// resolved here (not in the MCP-free provider.FromConfig), preserving the quarantine.
+			if c.Kind == "mcp_resource" {
+				p, perr = mcpgate.NewMCPResourceProvider(deps.Fleet, c.Name, c.Config)
+			} else {
+				p, perr = provider.FromConfig(c.Name, c.Kind, c.Config)
+			}
 			if perr != nil {
 				log.Printf("session bind: dropping context provider %q: %v", c.Name, perr)
 				continue

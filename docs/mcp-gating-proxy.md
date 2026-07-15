@@ -110,9 +110,19 @@ gate's first start; env vars (`STAG_*_TOKEN`) override for containers.
   `stag://mcp/<server>?uri=<original>`, stamped **untrusted at origin** and **recorded**. A read is
   label+record and is never denied — reads inform the model, they do not authorize it. A server with no
   resources is unaffected (`resources/list` failing is not an error worth refusing a connection over).
-- **`http` context providers.** The `rag` and `mcp_resource` provider kinds are reserved and fail closed
-  (an unbuildable provider is dropped from the session, never fabricated). Keeping retrieval in a
-  *downstream* provider is deliberate: it is what lets the gate stay model-free.
+- **`http`, `static`, and `mcp_resource` context providers.** `http` proxies a downstream endpoint
+  (the query is a parameter, never executed). `mcp_resource` binds a *connected* downstream MCP
+  server's own resources as a named context provider (config `{server, uris?}`; empty `uris` reads
+  every resource the server discovered) — resolved at the daemon from the live session, stamped
+  untrusted and recorded like all context. `static` is a content-addressed local bundle: the operator
+  points it at a file or directory, the gate reads + hashes it at registration and serves it
+  **verbatim with no query**
+  — no retrieval, no outbound anything, which removes the READ-side egress channel entirely and suits
+  runbooks (whole-document beats similarity search at that scale). The outbound query on any provider is
+  length-bounded before it reaches the provider, and every read records per-item content hashes, so the
+  audit attests the exact bytes the model saw. The `rag` and `mcp_resource` kinds are reserved and fail
+  closed (an unbuildable provider is dropped from the session, never fabricated); keeping *retrieval* in a
+  downstream provider is deliberate — it is what lets the gate stay model-free.
 
 ## Verified interop
 

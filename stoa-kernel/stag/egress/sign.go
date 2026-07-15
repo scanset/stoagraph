@@ -119,6 +119,33 @@ func VerifyApproval(pub ed25519.PublicKey, fingerprint, token string) bool {
 	return ed25519.Verify(pub, append([]byte(approvalContext), fingerprint...), sig)
 }
 
+// skillContext domain-separates a skill signature from a checkpoint or approval signature (the same
+// bytes signed under a different context are not interchangeable).
+const skillContext = "stag-skill/v1\n"
+
+// SignSkill signs a skill's BUNDLE HASH (the content-addressed identity of the bundle), so a valid
+// signature attests exactly this bundle's bytes. Deterministic (RFC 8032), base64-encoded. This is
+// operator AUTHORSHIP (the operator published this procedure), not a claim about its correctness.
+func SignSkill(priv ed25519.PrivateKey, bundleHash string) string {
+	sig := ed25519.Sign(priv, append([]byte(skillContext), bundleHash...))
+	return base64.StdEncoding.EncodeToString(sig)
+}
+
+// VerifySkillSig checks a skill signature against its bundle hash and the operator's public key. The
+// HARNESS calls this before placing a skill in the instruction slot — trust from cryptography the
+// reader checks, never from a label the channel asserts. Fail-closed on any decode/length error, so
+// an unsigned or malformed skill degrades to untrusted (Input) rather than being trusted by accident.
+func VerifySkillSig(pub ed25519.PublicKey, bundleHash, sigB64 string) bool {
+	if len(pub) != ed25519.PublicKeySize || sigB64 == "" {
+		return false
+	}
+	sig, err := base64.StdEncoding.DecodeString(sigB64)
+	if err != nil {
+		return false
+	}
+	return ed25519.Verify(pub, append([]byte(skillContext), bundleHash...), sig)
+}
+
 // kw: marshal private key base64 seed
 func MarshalPrivate(priv ed25519.PrivateKey) []byte {
 	return encodeKey(priv.Seed()) // the 32-byte seed reconstructs the full key

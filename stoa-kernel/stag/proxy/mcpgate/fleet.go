@@ -54,6 +54,15 @@ func NewFleet(downs []Downstream) Fleet {
 	return f
 }
 
+// Server resolves a downstream by name (no tool required), for the mcp_resource context provider
+// (C4): bind a connected server's resources as a queryable READ-channel provider. Fail-closed — an
+// unconnected server is not fabricated.
+// kw: fleet server by-name accessor mcp-resource
+func (f Fleet) Server(name string) (Downstream, bool) {
+	d, ok := f.byName[name]
+	return d, ok
+}
+
 // Lookup resolves a ROUTE (server + tool) to the connected server and the tool's declaration. It fails
 // when the named server is not connected, or when that server does not expose that tool — both of which
 // are configuration errors the operator must be told about, never guessed around.

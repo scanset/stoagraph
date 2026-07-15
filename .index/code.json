@@ -565,6 +565,27 @@
       ]
     },
     {
+      "doc": "Package skill resolves a bound skill to a TRUST SLOT (Planning/33, C3). A skill is a content-addressed procedure bundle; the harness verifies its ed25519 signature against the OPERATOR's public key and, only if it verifi",
+      "keywords": [
+        "skill",
+        "resolve",
+        "verify",
+        "ed25519",
+        "trust-slot",
+        "system",
+        "input",
+        "signed",
+        "unsigned",
+        "tier",
+        "audit",
+        "clawhub"
+      ],
+      "layer": "orchestrator",
+      "package": "skill",
+      "path": "stoa-kernel/harness/skill/skill.go",
+      "symbols": []
+    },
+    {
       "doc": "Package store is the event_harness's own model-provider config: which models the orchestrator can drive, and where their keys live. This is the config that was removed from stag (the gate holds no keys) \u2014 it belongs HERE",
       "keywords": [
         "orchestrator",
@@ -1026,7 +1047,7 @@
             "base64",
             "seed"
           ],
-          "line": 123,
+          "line": 150,
           "name": "MarshalPrivate"
         },
         {
@@ -1037,7 +1058,7 @@
             "fail-closed",
             "length"
           ],
-          "line": 128,
+          "line": 155,
           "name": "ParsePrivate"
         },
         {
@@ -1047,7 +1068,7 @@
             "key",
             "base64"
           ],
-          "line": 137,
+          "line": 164,
           "name": "MarshalPublic"
         },
         {
@@ -1058,7 +1079,7 @@
             "fail-closed",
             "length"
           ],
-          "line": 142,
+          "line": 169,
           "name": "ParsePublic"
         },
         {
@@ -1068,7 +1089,7 @@
             "base64",
             "line"
           ],
-          "line": 151,
+          "line": 178,
           "name": "encodeKey"
         },
         {
@@ -1079,7 +1100,7 @@
             "length-check",
             "fail-closed"
           ],
-          "line": 156,
+          "line": 183,
           "name": "decodeKey"
         }
       ]
@@ -1680,7 +1701,7 @@
             "read-channel",
             "crossing"
           ],
-          "line": 34,
+          "line": 38,
           "name": "ReadEvent"
         },
         {
@@ -1692,7 +1713,7 @@
             "content-addressed",
             "chainable"
           ],
-          "line": 55,
+          "line": 59,
           "name": "Hash"
         },
         {
@@ -1704,7 +1725,7 @@
             "trust",
             "score"
           ],
-          "line": 95,
+          "line": 99,
           "name": "ContextItem"
         },
         {
@@ -1716,7 +1737,7 @@
             "query",
             "items"
           ],
-          "line": 103,
+          "line": 107,
           "name": "ContextProvider"
         },
         {
@@ -1726,7 +1747,7 @@
             "name",
             "reason"
           ],
-          "line": 109,
+          "line": 113,
           "name": "ProviderError"
         },
         {
@@ -1739,7 +1760,7 @@
             "fail-open",
             "per-provider"
           ],
-          "line": 115,
+          "line": 119,
           "name": "Gather"
         },
         {
@@ -1753,7 +1774,7 @@
             "body",
             "untrusted"
           ],
-          "line": 139,
+          "line": 143,
           "name": "HTTP"
         },
         {
@@ -1761,7 +1782,7 @@
             "http",
             "name"
           ],
-          "line": 146,
+          "line": 150,
           "name": "Name"
         },
         {
@@ -1777,8 +1798,24 @@
             "item",
             "data"
           ],
-          "line": 149,
+          "line": 153,
           "name": "Provide"
+        },
+        {
+          "kw": [
+            "static",
+            "name"
+          ],
+          "line": 210,
+          "name": "Name"
+        },
+        {
+          "kw": [
+            "skill",
+            "name"
+          ],
+          "line": 312,
+          "name": "Name"
         }
       ]
     },
@@ -1914,6 +1951,17 @@
         },
         {
           "kw": [
+            "fleet",
+            "server",
+            "by-name",
+            "accessor",
+            "mcp-resource"
+          ],
+          "line": 61,
+          "name": "Server"
+        },
+        {
+          "kw": [
             "lookup",
             "route",
             "server",
@@ -1921,7 +1969,7 @@
             "declaration",
             "fail-closed"
           ],
-          "line": 61,
+          "line": 70,
           "name": "Lookup"
         },
         {
@@ -1930,7 +1978,7 @@
             "all",
             "ordered"
           ],
-          "line": 75,
+          "line": 84,
           "name": "Downstreams"
         }
       ]
@@ -1967,6 +2015,25 @@
           "name": "SchemaArgs"
         }
       ]
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "mcp_resource",
+        "context",
+        "provider",
+        "proxy",
+        "downstream",
+        "resources",
+        "read",
+        "untrusted",
+        "quarantine",
+        "c4"
+      ],
+      "layer": "gate",
+      "package": "mcpgate",
+      "path": "stoa-kernel/stag/proxy/mcpgate/mcpresource.go",
+      "symbols": []
     },
     {
       "doc": "",
