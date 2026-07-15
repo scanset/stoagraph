@@ -1,0 +1,3 @@
+[09:15:22] INFO  auth-service: token rotation completed
+[09:15:23] WARN  auth-service: 4 failed logins for svc-deploy (rate-limited)
+[09:15:40] INFO  auth-service: healthcheck ok

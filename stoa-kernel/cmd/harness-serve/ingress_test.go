@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/scanset/stoagraph/stoa-kernel/harness/dispatch"
 	"github.com/scanset/stoagraph/stoa-kernel/harness/ingress"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/egress"
 )
@@ -50,6 +52,40 @@ func TestWebhookAttributedEventDispatches(t *testing.T) {
 	res, err := egress.VerifyChain[ingress.Record](bytes.NewReader(logbuf.Bytes()))
 	if err != nil || res.Count != 1 {
 		t.Fatalf("ingress log must have one verified leaf: count=%d err=%v", res.Count, err)
+	}
+}
+
+// When an ingress model is configured (runEvent set), a matched+attributed webhook LAUNCHES the
+// governed run for exactly that decision — the front door is wired through to the agent loop.
+func TestWebhookTriggersGovernedRun(t *testing.T) {
+	dir := t.TempDir()
+	emap := filepath.Join(dir, "event_map.json")
+	writeFile(t, emap, `[{"id":"drift","match":{"source":"prooflayer","type":"posture.drifted"},"recipe":"remediate","tools":["fix"],"context":["logs"]}]`)
+
+	secret := []byte("shared")
+	ran := make(chan dispatch.Decision, 1)
+	s := &Server{
+		eventMap:      emap,
+		ingressChain:  egress.NewChain[ingress.Record](new(bytes.Buffer)),
+		ingressSecret: secret,
+		runEvent: func(dec dispatch.Decision, _ dispatch.Event, _ ingress.Envelope) {
+			ran <- dec
+		},
+	}
+
+	payload := []byte(`{"id":"e1","type":"posture.drifted","source":"prooflayer"}`)
+	req := httptest.NewRequest("POST", "/api/ingress/prooflayer", bytes.NewReader(payload))
+	req.SetPathValue("source", "prooflayer")
+	req.Header.Set("X-Stag-Signature", ingress.Sign(secret, payload))
+	s.webhook(httptest.NewRecorder(), req)
+
+	select {
+	case dec := <-ran:
+		if dec.RecipeID != "remediate" || len(dec.Tools) != 1 || dec.Tools[0] != "fix" || len(dec.Context) != 1 {
+			t.Fatalf("the run got the wrong decision: %+v", dec)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a matched webhook with a model configured must launch the governed run")
 	}
 }
 

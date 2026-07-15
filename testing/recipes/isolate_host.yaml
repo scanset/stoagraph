@@ -1,0 +1,10 @@
+# isolate_host(host): reversible containment, but consequential — escalate to a human for any host.
+recipe: isolate_policy
+version: 1
+rules:
+  never: {kind: set_membership, set: ["__none__"]}
+steps:
+  - {id: p, kind: propose, out: host}
+  - {id: g, kind: gate, in: host, rule: never, on_fail: escalate}
+  - {id: s, kind: sink, in: host, field: ops.isolate, sensitivity: benign, goto: done}
+  - {id: done, kind: exit}

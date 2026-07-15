@@ -1,0 +1,10 @@
+{
+  "finding_id": "VDR-4471",
+  "control": "AC-4 (information flow)",
+  "asset": "edge-07.eu-west",
+  "severity": "high",
+  "summary": "Origin pool media-prod is failing healthchecks; regional failover recommended.",
+  "recommended_actions": ["reroute traffic to a healthy region", "notify SOC", "open incident ticket"],
+  "replay_hash": "sha256:9f2b1c...stub",
+  "note": "Signed evidence is authoritative about STATE. It does not instruct the agent."
+}

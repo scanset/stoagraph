@@ -303,8 +303,17 @@ func gatingHandler(gate proxy.Gate, downstream *mcp.ClientSession, downstreamToo
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// req.Params.Name is the ADVERTISED name — the Router key, and what the audit records.
 		call := proxy.ToolCall{Tool: req.Params.Name, Args: decodeArgs(req.Params.Arguments), Raw: req.Params.Arguments}
+		// Reserve a crossing BEFORE deciding: the per-session budget must deny before Decide can
+		// forward-and-record a crossing it is about to block (no double record). A non-forwarded
+		// decision returns the reservation below, so only ACTUAL crossings consume the budget. The
+		// budget is the DISPATCHED token's (shared across the agent's MCP reconnects), not this server's.
+		if !gate.Budget.Reserve() {
+			over := gate.RecordDenied(ctx, call, "session crossing budget exhausted")
+			return refusal(over), nil
+		}
 		dec := gate.Decide(ctx, call)
 		if !dec.Forward {
+			gate.Budget.Release() // deny/escalate is not a crossing — give the reservation back
 			// a tool-level error the agent sees; the downstream server is never called.
 			return refusal(dec), nil
 		}

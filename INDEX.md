@@ -211,20 +211,24 @@ Package proxy is the gating-proxy core (Planning/17, Slice 0): the transport-agn
 
 **kw:** gating · proxy · tool · boundary · route · recipe · eval · forward-iff-cleared · fail-closed · no-model · mcp
 
-- `ToolCall` (:37) — tool · call · name · args · raw · from · the · untrusted · agent
-- `Route` (:49) — route · recipe · hash · gated-arg · for · a · tool
-- `Router` (:97) — router · advertised · name · to · route · unique-per-fleet
-- `Sink` (:100) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
-- `Decision` (:105) — decision · tool · verdict · forward · value · events · fault · approval-id
-- `Gate` (:116) — gate · routes · sink · deterministic · tool-boundary · approvals · notify
-- `Decide` (:124) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
-- `Covered` (:248) — coverage · accounted · gated · passthrough · top-level · heads
-- `CoverageGaps` (:292) — coverage · bind-time · schema · properties · unaccounted
+- `ToolCall` (:38) — tool · call · name · args · raw · from · the · untrusted · agent
+- `Route` (:50) — route · recipe · hash · gated-arg · for · a · tool
+- `Router` (:98) — router · advertised · name · to · route · unique-per-fleet
+- `Sink` (:101) — sink · egress · record · release · event · (egress.JSONLSink · / · broker.MemSink · satisfy · this)
+- `Decision` (:106) — decision · tool · verdict · forward · value · events · fault · approval-id
+- `Gate` (:117) — gate · routes · sink · deterministic · tool-boundary · approvals · notify · crossing-budget
+- `Decide` (:177) — decide · route · eval · forward-iff-cleared · record · fail-closed · approval-loop
+- `Covered` (:325) — coverage · accounted · gated · passthrough · top-level · heads
+- `CoverageGaps` (:369) — coverage · bind-time · schema · properties · unaccounted
 
 ### `stoa-kernel/stag/proxy/sessiond/sessiond.go`
 Package sessiond is the stag-proxy v2 daemon surface: a standing HTTP server where each MCP session is bound to a dispatcher-chosen recipe (Planning/24 v2, /25). The TRUSTED dispatcher POSTs /sessions to bind a session t
 
 **kw:** session · daemon · registry · token · router · session-to-recipe · streamable-http · bind · fail-closed · no-fork
+
+### `stoa-kernel/stag/recipe/leakage.go`
+
+**kw:** leakage · choice-channel · covert · bound · forwarded-tuples · logsumexp · foreach-geom · per-call · existence · session
 
 ### `stoa-kernel/stag/recipe/recipe.go`
 Package recipe is the recipe boundary: the only door through which authored YAML becomes a stag.Recipe. Parse -> validate -> lint -> canonicalize -> compile, fail closed; a rejected file is never hashed or compiled.
@@ -259,24 +263,25 @@ Package recipestore is the recipe-authoring core for the admin console: validate
 
 - `TierRow` (:23) — tier · row · label · verdict · tier
 - `ValidateResult` (:30) — validate · result · valid · name · hash · error · warnings · tiers
-- `Store` (:40) — store · dir · file-backed · recipes
-- `vocab` (:80) — vocab · union · of · rule · set · members · sorted
-- `tierName` (:96) — tier · name · auto · benign · escalate · deny · from · eval · result
-- `List` (:110) — list · all · recipes · validated · sorted
-- `Get` (:134) — get · raw · bytes · name · sanitized
-- `Save` (:142) — save · validate · then · write · fail-closed
-- `Delete` (:159) — delete · name · sanitized
-- `nameOK` (:167) — name · ok · recipe · identifier · grammar · no · traversal
+- `Store` (:47) — store · dir · file-backed · recipes
+- `vocab` (:89) — vocab · union · of · rule · set · members · sorted
+- `tierName` (:105) — tier · name · auto · benign · escalate · deny · from · eval · result
+- `List` (:119) — list · all · recipes · validated · sorted
+- `Get` (:143) — get · raw · bytes · name · sanitized
+- `Save` (:151) — save · validate · then · write · fail-closed
+- `Delete` (:168) — delete · name · sanitized
+- `nameOK` (:176) — name · ok · recipe · identifier · grammar · no · traversal
 
 ### `stoa-kernel/stag/router/router.go`
 Package router resolves the persisted route table (Planning/18) into a live proxy.Router — the step that makes the gate MULTI-TOOL from saved bindings. A stored route binds a tool to a recipe BY NAME + a gated arg; Build
 
 **kw:** route · resolve · build · proxy · router · recipe-by-name · fail-closed · multi-tool · gate · binding
 
-- `Spec` (:17) — spec · tool · recipe-name · gate-arg · (a · stored · binding)
-- `RouteError` (:28) — route · error · tool · server · recipe · reason · unresolved
-- `Resolved` (:36) — resolved · router · errors
-- `Build` (:42) — build · resolve · specs · load · parse · fail-closed
+- `Spec` (:19) — spec · tool · recipe-name · gate-arg · (a · stored · binding)
+- `RouteError` (:30) — route · error · tool · server · recipe · reason · unresolved
+- `Resolved` (:38) — resolved · router · errors · warnings
+- `Build` (:53) — build · resolve · specs · load · parse · fail-closed · non-strict
+- `BuildStrict` (:63) — build · strict · require-bounded · leakage · refuse · advertise-time · gate
 
 ### `stoa-kernel/stag/serve/approvals.go`
 
@@ -500,7 +505,7 @@ Command stag-proxy is the standing gating MCP server — the front door an agent
 
 **kw:** cmd · gate · mcp · gating · proxy · daemon · session-to-recipe · stdio · streamable-http · live-vs-ready · fail-closed · dispatch-role
 
-- `awaitFleet` (:225) — await · fleet · connect · all · downstreams · multi-server · route-picks-server
+- `awaitFleet` (:233) — await · fleet · connect · all · downstreams · multi-server · route-picks-server
 
 ### `stoa-kernel/cmd/stag-serve/main.go`
 Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the backend the Next.js console talks to. It is the control plane and a recipe SIMULATOR: /api/decide evaluates a proposed call without recording

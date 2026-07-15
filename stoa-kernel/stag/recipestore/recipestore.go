@@ -34,6 +34,13 @@ type ValidateResult struct {
 	Error    string    `json:"error,omitempty"`
 	Warnings []string  `json:"warnings,omitempty"`
 	Tiers    []TierRow `json:"tiers,omitempty"`
+	// LeakBits is the choice-channel bound: the max bits a single session could exfiltrate through the
+	// agent's choices among what this recipe ALLOWS (see recipe.Leakage). LeakUnbounded is set when a
+	// free-text field voids the bound. Shown at authoring time so the operator sees the covert-channel
+	// capacity of a policy as they write it — a number no competitor can produce.
+	LeakBits      float64 `json:"leakBits"`
+	LeakUnbounded bool    `json:"leakUnbounded,omitempty"`
+	LeakReason    string  `json:"leakReason,omitempty"`
 }
 
 // kw: store dir file-backed recipes
@@ -69,6 +76,8 @@ func validate(src []byte, resolve recipe.Resolver) ValidateResult {
 		return ValidateResult{Valid: false, Error: err.Error()}
 	}
 	vr := ValidateResult{Valid: true, Name: p.Header.Name, Hash: p.SemanticHash, Warnings: warns}
+	lk := recipe.Leakage(p.Recipe)
+	vr.LeakBits, vr.LeakUnbounded, vr.LeakReason = lk.CallBits, lk.Unbounded, lk.UnboundedReason
 	for _, label := range vocab(p) {
 		res := stag.Eval(p.Recipe, label, p.SemanticHash)
 		vr.Tiers = append(vr.Tiers, TierRow{Label: label, Verdict: res.Verdict.String(), Tier: tierName(res)})

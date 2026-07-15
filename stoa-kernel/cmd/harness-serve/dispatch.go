@@ -127,9 +127,19 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 	emit(agent.Event{Kind: "dispatch", Tool: dec.RecipeID,
 		Result: fmt.Sprintf("routed to %s via %s (confidence %s)", target, via, dec.Confidence)})
 
-	// 2. build the session on the daemon — a multi-tool toolset if the definition named one, else
-	//    the single recipe's routes. Each tool stays gated by its own recipe.
+	s.governedRun(ctx, dec, req.Event, req.Model, req.System, req.MaxTurns, emit)
+}
+
+// governedRun is the "run a governed agent for a resolved event" core, shared by the SSE console
+// dispatch (above) and the webhook front door (ingress.go). Given a Decision (recipe/toolset/context
+// already chosen), it binds a session on the stag-proxy daemon, connects the agent loop, reads the
+// session's UNTRUSTED context from the gate, and runs the model<->gate loop. Every proposed tool call
+// is gated; a misroute cannot breach. emit streams the transcript (SSE downstream, or a log for the
+// async webhook path).
+func (s *Server) governedRun(ctx context.Context, dec dispatch.Decision, event map[string]any, modelName, system string, maxTurns int, emit func(agent.Event)) {
+	stag := dispatch.StagClient{BaseURL: s.approvals, Token: s.stagToken}
 	var routes []dispatch.RouteSpec
+	var err error
 	if len(dec.Tools) > 0 {
 		routes, err = stag.RoutesForTools(dec.Tools)
 	} else {
@@ -139,9 +149,6 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 		emit(agent.Event{Kind: "error", Text: "routes for session: " + err.Error()})
 		return
 	}
-	// READ channel (Planning/30): resolve the definition's context providers to specs and bind them
-	// alongside the routes, so the gate serves them as untrusted MCP resources. Enrichment, so a
-	// resolution failure is non-fatal — the session just gets no READ channel.
 	providers, perr := stag.ProvidersFor(dec.Context)
 	if perr != nil {
 		emit(agent.Event{Kind: "dispatch", Result: "context providers unavailable, proceeding without READ channel: " + perr.Error()})
@@ -162,7 +169,6 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 	}
 	emit(agent.Event{Kind: "dispatch", Result: bound + " on the daemon"})
 
-	// 3. connect the agent loop to the session and run it against the event.
 	sess, tools, err := agent.ConnectHTTP(ctx, endpoint)
 	if err != nil {
 		emit(agent.Event{Kind: "error", Text: "connect daemon: " + err.Error()})
@@ -175,21 +181,15 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 	}
 	emit(agent.Event{Kind: "text", Text: fmt.Sprintf("agent session — gated tool(s): %v", names)})
 
-	m, ok, err := s.models.Get(req.Model)
+	m, ok, err := s.models.Get(modelName)
 	if err != nil || !ok {
-		emit(agent.Event{Kind: "error", Text: "proposer model not found: " + req.Model})
+		emit(agent.Event{Kind: "error", Text: "proposer model not found: " + modelName})
 		return
 	}
-	system := req.System
 	if system == "" {
 		system = defaultDispatchSystem
 	}
-	// READ channel (Planning/30): read the session's UNTRUSTED context FROM THE GATE. The gate has
-	// already Gathered the bound providers, stamped every item untrusted at origin, and recorded the
-	// crossing — the harness trusts the CHANNEL (stag://context/*), not a flag. bind.Assemble keeps the
-	// trusted instruction in System and the untrusted event + context in Input, labeled as data —
-	// context informs the model but is structurally unable to reach the instruction slot or the gate.
-	eventJSON := eventInput(req.Event)
+	eventJSON := eventInput(event)
 	docs := readGateContext(ctx, sess, eventJSON)
 	if len(docs) > 0 {
 		srcs := make([]string, len(docs))
@@ -204,7 +204,6 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 		emit(agent.Event{Kind: "error", Text: err.Error()})
 		return
 	}
-	maxTurns := req.MaxTurns
 	if maxTurns <= 0 {
 		maxTurns = 6
 	}

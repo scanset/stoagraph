@@ -1,0 +1,3 @@
+[
+  { "name": "local-qwen", "kind": "openai", "baseUrl": "http://172.18.160.1:11434/v1", "model": "qwen3-coder:latest", "apiKey": "ollama" }
+]

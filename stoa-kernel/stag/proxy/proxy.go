@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	stag "github.com/scanset/stoagraph/stoa-kernel/stag"
 	"github.com/scanset/stoagraph/stoa-kernel/stag/proxy/argpath"
@@ -112,12 +113,64 @@ type Decision struct {
 	ApprovalID string // set when an escalate is (or awaits) a human approval; "" otherwise
 }
 
-// kw: gate routes sink deterministic tool-boundary approvals notify
+// kw: gate routes sink deterministic tool-boundary approvals notify crossing-budget
 type Gate struct {
 	Routes     Router
 	Sink       Sink
 	Approvals  Approvals                                  // optional: enables the escalate->approval loop (Stage 5)
 	OnEscalate func(ctx context.Context, n PendingNotice) // optional: push notify (webhook) on a fresh escalation
+	// Budget is the per-DISPATCHED-SESSION forwarded-crossing cap N (Planning/34 §6.2). The leakage bound
+	// is a per-session ceiling (N crossings), so it is only a guarantee if N is enforced at the gate — the
+	// reference harness's maxTurns is client-side and an injected agent need not honour it. nil means
+	// unlimited (the budget is off).
+	//
+	// It is a POINTER, and its lifetime is the dispatcher's session binding — NOT the MCP transport
+	// session. The untrusted agent can re-initialize the MCP transport at will (drop the Mcp-Session-Id,
+	// POST initialize again), which mints a fresh gating server; if the counter lived in the gating server
+	// the agent would reset N to zero every reconnect. So the same *CrossingBudget is created once per
+	// bound token (sessiond.Registry) and shared across every gating server built for that token. Decide
+	// itself stays stateless; the budget is consulted in the transport layer (mcpgate.gatingHandler).
+	Budget *CrossingBudget
+}
+
+// CrossingBudget is a session's forwarded-crossing counter. Reserve() is taken before a decision and
+// Release()d if the call does not forward, so the count tracks ACTUAL crossings. A nil *CrossingBudget,
+// or one with limit <= 0, is unlimited (the budget is off). It is safe for concurrent use and for a nil
+// receiver, so the transport layer can call it unconditionally.
+type CrossingBudget struct {
+	mu    sync.Mutex
+	count int
+	limit int
+}
+
+// NewCrossingBudget returns a budget of at most limit forwarded crossings (limit <= 0 = unlimited).
+func NewCrossingBudget(limit int) *CrossingBudget { return &CrossingBudget{limit: limit} }
+
+// Reserve claims one crossing if the budget allows, atomically. Returns false when the session has
+// already used its limit — the caller then denies fail-closed without deciding. nil/unlimited => true.
+func (c *CrossingBudget) Reserve() bool {
+	if c == nil || c.limit <= 0 {
+		return true
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.count >= c.limit {
+		return false
+	}
+	c.count++
+	return true
+}
+
+// Release returns a reservation taken by Reserve() when the call turned out not to cross (deny/escalate).
+func (c *CrossingBudget) Release() {
+	if c == nil || c.limit <= 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.count > 0 {
+		c.count--
+	}
 }
 
 // kw: decide route eval forward-iff-cleared record fail-closed approval-loop
@@ -182,7 +235,8 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 
 	res, everr := evalSlots(recipe, slots, route.RecipeHash, strings.Contains(route.GateArg, ","))
 	if everr != nil {
-		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Value: value, Fault: everr.Error()}
+		// a deny: withhold the raw proposed value from the signed log (see redactedValue).
+		d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Value: redactedValue(slots), Fault: everr.Error()}
 		g.record(ctx, d, route.RecipeName, route.RecipeHash)
 		return d
 	}
@@ -204,7 +258,18 @@ func (g Gate) Decide(ctx context.Context, call ToolCall) Decision {
 		}
 	}
 
-	d := Decision{Tool: call.Tool, Verdict: res.Verdict, Forward: forward, Value: value, Events: res.Events, Fault: res.Fault, ApprovalID: approvalIDForView(res.Verdict, approvedID, fingerprint, needsApproval)}
+	// A DENY or ESCALATE withholds the raw proposed value from the signed log (redactedValue): the model
+	// can propose arbitrary free-text and force EITHER verdict at will (any value fails a closed set;
+	// any value hits an on_fail:escalate gate), so recording it verbatim is a covert channel through the
+	// audit log — and an escalate does not even consume the crossing budget, so the channel would be
+	// unbounded. Only ALLOW keeps its value: it is a released closed-set member, hence bounded. The human
+	// approver still sees the exact escalated action via the approval store's argsJSON (RecordPending),
+	// not this field, so redacting it here loses nothing for review.
+	auditVal := value
+	if res.Verdict == stag.Deny || res.Verdict == stag.Escalate {
+		auditVal = redactedValue(slots)
+	}
+	d := Decision{Tool: call.Tool, Verdict: res.Verdict, Forward: forward, Value: auditVal, Events: res.Events, Fault: res.Fault, ApprovalID: approvalIDForView(res.Verdict, approvedID, fingerprint, needsApproval)}
 	g.record(ctx, d, route.RecipeName, route.RecipeHash)
 	return d
 }
@@ -235,6 +300,18 @@ func (g Gate) record(ctx context.Context, d Decision, recipeName, recipeHash str
 		rec.Events = d.Events
 	}
 	_ = g.Sink.Record(ctx, rec)
+}
+
+// RecordDenied records a fail-closed DENY for a call refused BEFORE evaluation — e.g. a session
+// crossing-budget overflow, where the transport layer must deny without letting Decide forward-and-record
+// a crossing it is about to block. It reuses the one record path so the signed log stays uniform: a
+// single leaf, no release (nothing crossed), the reason in Fault. The value is withheld (a refused call
+// records no proposed bytes; see redactedValue). Returns the Decision so the caller can shape the refusal.
+func (g Gate) RecordDenied(ctx context.Context, call ToolCall, fault string) Decision {
+	route := g.Routes[call.Tool] // zero Route if unrouted — empty name/hash is correct then
+	d := Decision{Tool: call.Tool, Verdict: stag.Deny, Forward: false, Fault: fault}
+	g.record(ctx, d, route.RecipeName, route.RecipeHash)
+	return d
 }
 
 // Covered reports the set of TOP-LEVEL argument names a route accounts for: the head segment of
@@ -480,6 +557,39 @@ func joinVals(vs []string) string {
 		return vs[0]
 	}
 	return "[" + strings.Join(vs, " ") + "]"
+}
+
+// withheld is the bounded placeholder a DENY records in place of the model's raw proposed value.
+const withheld = "<withheld>"
+
+// redactedValue renders a non-forwarded verdict's audit value with every gated value WITHHELD. On a deny
+// or escalate nothing crosses, so the proposed bytes have no release to attest — and recording them
+// verbatim would turn the signed, hash-chained log into a covert channel: an observer of the log would
+// read attacker-chosen free-text on every such call (the leakage bound assumes a semantic-value observer;
+// this closes the Value channel for the verdicts that redact, Planning/34 §6.3). The descriptor keeps the
+// gated argument NAMES — which are recipe-structural, so bounded and carrying no per-call choice — and
+// withholds only the values. The raw proposed action, when needed for forensics, belongs in a separate
+// operator-private capture (the READ log already attests the untrusted source), never the release log.
+//
+// This closes the VALUE channel only. A denied leaf's Fault may still carry an attacker-chosen substring
+// (an unrouted tool name; an unaccounted argument key) — a smaller, separate residual noted in
+// Planning/34 §6.3; bounding it trades away the "the agent reached for tool X" evidence, so it is left
+// visible by default. ALLOW keeps its canonical value (a released closed-set member — already bounded).
+func redactedValue(slots []slot) string {
+	if len(slots) == 1 && slots[0].name == "" {
+		return "" // no gated argument to speak of
+	}
+	if len(slots) == 1 {
+		return withheld
+	}
+	parts := make([]string, 0, len(slots))
+	for _, s := range slots {
+		if s.name == MetaApprovalToken {
+			continue
+		}
+		parts = append(parts, s.name+"="+withheld)
+	}
+	return strings.Join(parts, " ")
 }
 
 // splitGateArg parses a GateArg into its paths: one path (single-arg) or a comma-separated

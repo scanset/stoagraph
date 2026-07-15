@@ -3,10 +3,14 @@ package main
 // file-kw: webhook ingress receiver hmac verify record chained lane-1 dispatch front-door
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/scanset/stoagraph/stoa-kernel/harness/agent"
 	"github.com/scanset/stoagraph/stoa-kernel/harness/dispatch"
 	"github.com/scanset/stoagraph/stoa-kernel/harness/ingress"
 )
@@ -70,6 +74,18 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 	case matched:
 		disposition = "dispatched:" + def.Recipe
 		status = http.StatusOK
+		// RUN the governed agent loop for this event (Planning/32 lane 1, end to end). A webhook sender
+		// does not wait for an incident to be worked, so the run is fire-and-forget: launched in the
+		// background, its transcript to the log, its actions gated + recorded in the gate's signed
+		// chains. runEvent is set only when an ingress model is configured (else the front door
+		// resolves + records but does not execute — resolve-only).
+		if s.runEvent != nil {
+			dec := dispatch.Decision{
+				RecipeID: def.Recipe, Tools: def.Tools, Context: def.Context,
+				Confidence: "high", Mode: "deterministic", Definition: def.ID,
+			}
+			go s.runEvent(dec, event, env)
+		}
 	}
 	_ = s.ingressChain.Append(ingress.RecordOf(env, disposition))
 
@@ -78,6 +94,35 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 		"attributed": env.Attributed, "disposition": disposition,
 		"recipe": routedRecipe(matched, def, disposition),
 	})
+}
+
+// runIngressEvent runs the governed agent loop for a webhook-dispatched event, in the background. The
+// transcript is logged (prefixed with the event id) rather than streamed — a webhook has no client to
+// stream to; the enforcement record is the gate's signed chains, not this log.
+func (s *Server) runIngressEvent(dec dispatch.Decision, event dispatch.Event, env ingress.Envelope) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	tag := env.Source + "/" + env.ID
+	log.Printf("ingress[%s]: dispatched to %q — running governed agent", tag, dec.RecipeID)
+	s.governedRun(ctx, dec, map[string]any(event), s.ingressModel, "", 0, func(e agent.Event) {
+		switch e.Kind {
+		case "propose":
+			log.Printf("ingress[%s]: PROPOSE %s(%s)", tag, e.Tool, e.Args)
+		case "verdict":
+			log.Printf("ingress[%s]:   gate %s %s -> %s", tag, verdictWord(e.Allowed), e.Tool, e.Result)
+		case "error":
+			log.Printf("ingress[%s]: error: %s", tag, e.Text)
+		case "done":
+			log.Printf("ingress[%s]: done. %s", tag, e.Text)
+		}
+	})
+}
+
+func verdictWord(allowed bool) string {
+	if allowed {
+		return "ALLOWED"
+	}
+	return "DENIED/HELD"
 }
 
 // payloadEvent turns an envelope into the dispatcher's Event view: the JSON payload as a map, with

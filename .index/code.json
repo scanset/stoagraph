@@ -120,7 +120,7 @@
             "multi-server",
             "route-picks-server"
           ],
-          "line": 225,
+          "line": 233,
           "name": "awaitFleet"
         }
       ]
@@ -2118,7 +2118,7 @@
             "untrusted",
             "agent"
           ],
-          "line": 37,
+          "line": 38,
           "name": "ToolCall"
         },
         {
@@ -2131,7 +2131,7 @@
             "a",
             "tool"
           ],
-          "line": 49,
+          "line": 50,
           "name": "Route"
         },
         {
@@ -2143,7 +2143,7 @@
             "route",
             "unique-per-fleet"
           ],
-          "line": 97,
+          "line": 98,
           "name": "Router"
         },
         {
@@ -2159,7 +2159,7 @@
             "satisfy",
             "this)"
           ],
-          "line": 100,
+          "line": 101,
           "name": "Sink"
         },
         {
@@ -2173,7 +2173,7 @@
             "fault",
             "approval-id"
           ],
-          "line": 105,
+          "line": 106,
           "name": "Decision"
         },
         {
@@ -2184,9 +2184,10 @@
             "deterministic",
             "tool-boundary",
             "approvals",
-            "notify"
+            "notify",
+            "crossing-budget"
           ],
-          "line": 116,
+          "line": 117,
           "name": "Gate"
         },
         {
@@ -2199,7 +2200,7 @@
             "fail-closed",
             "approval-loop"
           ],
-          "line": 124,
+          "line": 177,
           "name": "Decide"
         },
         {
@@ -2211,7 +2212,7 @@
             "top-level",
             "heads"
           ],
-          "line": 248,
+          "line": 325,
           "name": "Covered"
         },
         {
@@ -2222,7 +2223,7 @@
             "properties",
             "unaccounted"
           ],
-          "line": 292,
+          "line": 369,
           "name": "CoverageGaps"
         }
       ]
@@ -2244,6 +2245,25 @@
       "layer": "gate",
       "package": "sessiond",
       "path": "stoa-kernel/stag/proxy/sessiond/sessiond.go",
+      "symbols": []
+    },
+    {
+      "doc": "",
+      "keywords": [
+        "leakage",
+        "choice-channel",
+        "covert",
+        "bound",
+        "forwarded-tuples",
+        "logsumexp",
+        "foreach-geom",
+        "per-call",
+        "existence",
+        "session"
+      ],
+      "layer": "gate",
+      "package": "recipe",
+      "path": "stoa-kernel/stag/recipe/leakage.go",
       "symbols": []
     },
     {
@@ -2557,7 +2577,7 @@
             "file-backed",
             "recipes"
           ],
-          "line": 40,
+          "line": 47,
           "name": "Store"
         },
         {
@@ -2570,7 +2590,7 @@
             "members",
             "sorted"
           ],
-          "line": 80,
+          "line": 89,
           "name": "vocab"
         },
         {
@@ -2585,7 +2605,7 @@
             "eval",
             "result"
           ],
-          "line": 96,
+          "line": 105,
           "name": "tierName"
         },
         {
@@ -2596,7 +2616,7 @@
             "validated",
             "sorted"
           ],
-          "line": 110,
+          "line": 119,
           "name": "List"
         },
         {
@@ -2607,7 +2627,7 @@
             "name",
             "sanitized"
           ],
-          "line": 134,
+          "line": 143,
           "name": "Get"
         },
         {
@@ -2618,7 +2638,7 @@
             "write",
             "fail-closed"
           ],
-          "line": 142,
+          "line": 151,
           "name": "Save"
         },
         {
@@ -2627,7 +2647,7 @@
             "name",
             "sanitized"
           ],
-          "line": 159,
+          "line": 168,
           "name": "Delete"
         },
         {
@@ -2640,7 +2660,7 @@
             "no",
             "traversal"
           ],
-          "line": 167,
+          "line": 176,
           "name": "nameOK"
         }
       ]
@@ -2673,7 +2693,7 @@
             "stored",
             "binding)"
           ],
-          "line": 17,
+          "line": 19,
           "name": "Spec"
         },
         {
@@ -2686,16 +2706,17 @@
             "reason",
             "unresolved"
           ],
-          "line": 28,
+          "line": 30,
           "name": "RouteError"
         },
         {
           "kw": [
             "resolved",
             "router",
-            "errors"
+            "errors",
+            "warnings"
           ],
-          "line": 36,
+          "line": 38,
           "name": "Resolved"
         },
         {
@@ -2705,10 +2726,24 @@
             "specs",
             "load",
             "parse",
-            "fail-closed"
+            "fail-closed",
+            "non-strict"
           ],
-          "line": 42,
+          "line": 53,
           "name": "Build"
+        },
+        {
+          "kw": [
+            "build",
+            "strict",
+            "require-bounded",
+            "leakage",
+            "refuse",
+            "advertise-time",
+            "gate"
+          ],
+          "line": 63,
+          "name": "BuildStrict"
         }
       ]
     },

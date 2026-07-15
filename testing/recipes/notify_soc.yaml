@@ -1,0 +1,9 @@
+# notify_soc(channel, message): only real SOC channels; the message is free text (declared passthrough).
+recipe: notify_policy
+version: 1
+passthrough: ["message"]
+rules:
+  ch.ok: {kind: set_membership, set: ["soc-alerts", "soc-incidents", "oncall"]}
+steps:
+  - {id: p, kind: propose, out: channel}
+  - {id: s, kind: sink, in: channel, field: ops.notify, sensitivity: authoritative, rule: ch.ok, actor: "policy:notify"}

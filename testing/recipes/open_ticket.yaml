@@ -1,0 +1,9 @@
+# open_ticket(system, summary): only known trackers; summary is free text (declared passthrough).
+recipe: ticket_policy
+version: 1
+passthrough: ["summary"]
+rules:
+  sys.ok: {kind: set_membership, set: ["servicenow", "jira"]}
+steps:
+  - {id: p, kind: propose, out: system}
+  - {id: s, kind: sink, in: system, field: ops.ticket, sensitivity: authoritative, rule: sys.ok, actor: "policy:ticket"}

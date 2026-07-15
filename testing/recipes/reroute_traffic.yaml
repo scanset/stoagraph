@@ -1,0 +1,7 @@
+recipe: reroute_policy
+version: 1
+rules:
+  target.ok: {kind: set_membership, set: ["eu-central", "us-east", "us-west"]}
+steps:
+  - {id: p, kind: propose, out: target}
+  - {id: s, kind: sink, in: target, field: ops.reroute, sensitivity: authoritative, rule: target.ok, actor: "policy:reroute"}

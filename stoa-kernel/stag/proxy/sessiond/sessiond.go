@@ -36,12 +36,18 @@ import (
 // TTL is a v1.1 hardening.
 const sessionIdleTimeout = 30 * time.Minute
 
-// boundSession is one session's binding: the recipe router (ACT channel) and the context providers
-// (READ channel). Both are chosen by the trusted dispatcher at bind time; the untrusted agent gets
-// only the token.
+// boundSession is one session's binding: the recipe router (ACT channel), the context providers (READ
+// channel), and the per-session crossing budget. All are chosen by the trusted dispatcher at bind time;
+// the untrusted agent gets only the token.
+//
+// The budget lives HERE, on the token binding — not in the per-MCP-session gating server — because the
+// untrusted agent can re-initialize the MCP transport at will (a fresh gating server each time). One
+// *proxy.CrossingBudget per token, shared across every gating server the agent opens under that token,
+// is what makes the cap N durable against reconnection (Planning/34 §6.2).
 type boundSession struct {
 	router    proxy.Router
 	providers []provider.ContextProvider
+	budget    *proxy.CrossingBudget
 }
 
 // Registry holds active session bindings — each a boundSession (the recipe router the dispatcher
@@ -59,8 +65,13 @@ func NewRegistry() *Registry { return &Registry{sessions: map[string]boundSessio
 // resolves) and binds it — with its READ-channel providers — under a fresh opaque token. The recipe
 // and provider choice belong to the caller (the trusted dispatcher); the untrusted agent only ever
 // receives the token.
-func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvider, loadRecipe func(string) ([]byte, error), fleet mcpgate.Fleet) (string, []router.RouteError, error) {
-	resolved := router.Build(specs, loadRecipe)
+func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvider, loadRecipe func(string) ([]byte, error), fleet mcpgate.Fleet, requireBounded bool, crossingBudget int) (string, []router.RouteError, error) {
+	resolved := router.BuildStrict(specs, loadRecipe, requireBounded)
+	// Leakage warnings are non-fatal (the route bound) but the operator is accepting an unbounded channel
+	// — make it visible. In strict mode the same condition is instead a route error, returned below.
+	for _, w := range resolved.Warnings {
+		log.Printf("session bind: route %q -> recipe %q binds with UNBOUNDED leakage: %s (start with -require-bounded to refuse)", w.Tool, w.Recipe, w.Err)
+	}
 
 	// THE ROUTE DELEGATES. Each route names the server that serves its tool; resolve it here, at bind,
 	// so a route the gate cannot actually dispatch is rejected WITH ITS REASON rather than binding
@@ -90,7 +101,9 @@ func (r *Registry) Create(specs []router.Spec, providers []provider.ContextProvi
 		return "", nil, err
 	}
 	r.mu.Lock()
-	r.sessions[tok] = boundSession{router: resolved.Router, providers: providers}
+	// One budget per token, created here and shared across every gating server this token opens — so the
+	// agent cannot reset the cap N by reconnecting the MCP transport.
+	r.sessions[tok] = boundSession{router: resolved.Router, providers: providers, budget: proxy.NewCrossingBudget(crossingBudget)}
 	r.mu.Unlock()
 	return tok, resolved.Errors, nil
 }
@@ -140,6 +153,13 @@ type Deps struct {
 	// session token IS the agent's credential, and handing the untrusted agent a control-plane
 	// bearer would be exactly backwards.
 	Auth *auth.Authenticator
+	// CrossingBudget is the per-session forwarded-crossing cap N enforced at the gate (Planning/34 §6.2);
+	// 0 = unlimited. RequireBounded makes bind REFUSE any recipe with unbounded leakage (§6.1) instead of
+	// binding it with a warning — the high-assurance posture where the whole deployment keeps a
+	// computable per-session leakage ceiling. Both default off (zero value) so existing deployments are
+	// unchanged until an operator opts in.
+	CrossingBudget int
+	RequireBounded bool
 }
 
 // Handler is the daemon's HTTP surface:
@@ -194,7 +214,7 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 			}
 			providers = append(providers, p)
 		}
-		tok, rerrs, err := reg.Create(specs, providers, deps.LoadRecipe, deps.Fleet)
+		tok, rerrs, err := reg.Create(specs, providers, deps.LoadRecipe, deps.Fleet, deps.RequireBounded, deps.CrossingBudget)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error(), "routeErrors": routeErrView(rerrs)})
 			return
@@ -220,7 +240,9 @@ func Handler(reg *Registry, deps Deps) http.Handler {
 		if !ok {
 			return nil // -> 400: no binding, no gate, nothing served
 		}
-		gate := proxy.Gate{Routes: bs.router, Sink: deps.Sink, Approvals: deps.Approvals, OnEscalate: deps.OnEscalate}
+		// bs.budget is the token's ONE shared counter — every MCP session the agent opens under this token
+		// draws down the same N, so reconnecting cannot reset it.
+		gate := proxy.Gate{Routes: bs.router, Sink: deps.Sink, Approvals: deps.Approvals, OnEscalate: deps.OnEscalate, Budget: bs.budget}
 		read := mcpgate.ReadChannel{Providers: bs.providers, Record: deps.RecordRead}
 		return mcpgate.NewGatingServer(gate, deps.Fleet, read)
 	}, &mcp.StreamableHTTPOptions{SessionTimeout: sessionIdleTimeout})

@@ -21,9 +21,16 @@ approval.key
 !*.pub.key
 .env
 .env.local
+# The testing/ demo harness's HMAC secret (SHARED_SECRET). The .example placeholder IS tracked.
+secret.env
 
 # --- 2. runtime state (regenerated; belongs in a volume, not in git) ---
 /data/
+# testing/ demo harness runtime state: minted keys/tokens, the blast-radius log, python caches.
+testing/data/
+testing/findings/actions.log
+**/__pycache__/
+*.pyc
 /logs/
 *.db
 *.sqlite
