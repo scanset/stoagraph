@@ -1,17 +1,19 @@
 # StoaGraph
 
-**Verifiable control for AI agents.** An agent proposes; a deterministic gate disposes — with no model
-in the decision path. A hijacked, prompt-injected, or simply wrong model can propose anything; it cannot
-make the gate release a value your policy rejects.
+**Verifiable control for AI agents.** An agent proposes a tool call; a deterministic gate disposes —
+allow, deny, or escalate — with no model in the decision path.
 
-> The model has a flashlight. The gate has the map.
+> **StoaGraph does not stop prompt injection. It stops prompt injection from turning into action.**
 
-Open source, Apache-2.0. No held-back edition.
+A hijacked, prompt-injected, or simply wrong model can propose anything; it cannot make the gate release
+a value your policy rejects. The model has a flashlight; the gate has the map.
+
+Open source, Apache-2.0. No held-back edition. New here? Start with the [doctrine](docs/doctrine.md).
 
 ## Quickstart
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.1.2/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/scanset/stoagraph/v0.2.1/install.sh | sh
 stoagraph up        # mint secrets, pull the signed images, start, print a one-click login link
 ```
 
@@ -66,6 +68,8 @@ guarantees — see [SECURITY.md](SECURITY.md).
 
 ## Docs
 
+- [docs/doctrine.md](docs/doctrine.md) — what StoaGraph does and the tenets it is built on. Start here.
+- [docs/context-binding.md](docs/context-binding.md) — how an agent reads untrusted context without letting it seize control.
 - [SECURITY.md](SECURITY.md) — the threat model and guarantees.
 - [docs/recipe-authoring.md](docs/recipe-authoring.md) — the policy language.
 - [docs/routes.md](docs/routes.md) — binding a tool to a policy: why an unrouted tool is denied, and which arguments a route must gate.

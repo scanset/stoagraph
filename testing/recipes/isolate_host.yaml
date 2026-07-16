@@ -1,10 +1,13 @@
-# isolate_host(host): reversible containment, but consequential — escalate to a human for any host.
+# isolate_host(host): reversible containment, but consequential — requires a SIGNED HUMAN APPROVAL
+# bound to the exact action. No token -> the gate holds it (escalate); a signed release for THIS action
+# -> allow, one time; a release minted for a different action does not transfer (different fingerprint).
+# The host is free-text passthrough — the control is the approval gate, not an allow-list of hosts.
 recipe: isolate_policy
 version: 1
+passthrough: ["host"]
 rules:
-  never: {kind: set_membership, set: ["__none__"]}
+  approved: {kind: signed_equality, signed: "$approved"}
 steps:
-  - {id: p, kind: propose, out: host}
-  - {id: g, kind: gate, in: host, rule: never, on_fail: escalate}
-  - {id: s, kind: sink, in: host, field: ops.isolate, sensitivity: benign, goto: done}
+  - {id: p_tok, kind: propose, out: approval_token}
+  - {id: g, kind: gate, in: approval_token, rule: approved, on_fail: escalate}
   - {id: done, kind: exit}

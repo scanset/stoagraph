@@ -59,6 +59,22 @@ proposed; it cannot make the gate release a value the rule rejects.**
 Do not build on the assumption that the untrusted label follows a value through the model. It does not,
 by design, because that guarantee is not achievable and pretending otherwise is how systems get breached.
 
+The mechanics — label at origin, position in the input slot, re-derive trust at the sink — are in
+[docs/context-binding.md](docs/context-binding.md); the tenets in [docs/doctrine.md](docs/doctrine.md).
+
+## Integrity, and a bounded residual
+
+StoaGraph is primarily an **integrity** control: it stops untrusted data from *authorizing an action*.
+It is not a full **confidentiality** control, and it does not pretend to be. Even when every allowed
+value is a closed set, a compromised model still gets to choose *which* of the allowed values crosses,
+and *whether* to act at all — a residual covert channel measured in bits per crossing.
+
+StoaGraph's answer is to **bound and report** that channel rather than wave it away: `recipe.Leakage`
+computes a signed, static number — the most a fully prompt-injected agent could exfiltrate through the
+actions it is *allowed* to take — and the deployment can refuse any policy whose leak is not finite. The
+residual is not zero; it is a number you can see. See [Guarantees](#guarantees) and
+[Non-goals](#non-goals-what-stoagraph-does-not-protect-against).
+
 ## The orchestrator cannot approve itself
 
 Human approval is only meaningful if the machine cannot forge it. Control-plane access is split into
@@ -91,8 +107,15 @@ signed release** the human's approval produced: a per-action signature, not a cr
   configuration in which uncertainty produces an allow.
 - **Structural policy safety.** A recipe that could leak an untrusted value to an authoritative sink
   without a rule release is *rejected by the linter*, not a runtime surprise.
-- **Tamper-evident audit.** Every cleared crossing is appended to a hash-chained log; checkpoints can be
-  signed for offline verification. Reads are recorded to a separate audit log.
+- **Bounded, computable leakage.** The residual choice channel (above) is not open-ended: `recipe.Leakage`
+  emits a signed, static ceiling on it. `-require-bounded` refuses any recipe whose leak is not finite
+  (a free-text field reaching an external sink), and `-crossing-budget N` caps forwarded crossings per
+  session at the gate — so the per-session leak is a number, not a guess.
+- **Tamper-evident audit.** Every decision — allow, deny, *and* escalate — is appended to a hash-chained
+  log; anyone can recompute it with **`stag-verify`**, and checkpoints can be signed for offline
+  verification. A non-forwarded decision **withholds the model's raw proposed value**: the log records
+  *that* it was blocked and under which policy, never the attacker's bytes. Reads are recorded to a
+  separate audit log.
 - **One-time human approval.** An escalation is released only by a signed token bound to that exact
   action, consumed on use (a replay re-escalates).
 - **Role separation.** The orchestrator cannot approve, and cannot author policy.
@@ -118,6 +141,11 @@ Being explicit here is the point.
   Real approver identity (OIDC) is a v2 item. **Do not present v1 approvals as attributable to a person.**
 - **Model correctness or output quality.** StoaGraph governs *actions*, not reasoning or prose.
 - **Taint propagation through the model.** See the trust invariant above. This is deliberate.
+- **Eliminating the choice channel, or timing.** The gate *bounds and reports* the residual leak (see
+  "Integrity, and a bounded residual"); it does not reduce it to zero. **Timing** — how long a decision
+  takes, in what order calls arrive — is a separate side channel StoaGraph does not bound. And a *denied*
+  leaf's reason string (`Fault`) can name an agent-chosen tool or argument: useful forensics on a private
+  log, but an agent-controlled substring if you export that log to an untrusted reader.
 - **Secrets at rest.** The config store is unencrypted. Prefer env-var references over stored secrets.
 
 ## Deployment requirements (operator responsibilities)
@@ -131,4 +159,9 @@ Being explicit here is the point.
 - **Protect the config store and the audit log.** Write access to the config store *is* policy change.
   Ship signed audit checkpoints off-box.
 - **Review recipes as policy.** Changes to recipes and routes are security changes.
+- **For a bounded leak, opt in.** Run the gate with `-require-bounded` (refuse any recipe with an
+  uncomputable leak) and `-crossing-budget N` (cap forwarded crossings per session). Without them the
+  gate still enforces the recipe faithfully; with them the per-session leak is a bounded, signed number.
+- **Keep the signed audit log private, or treat its `Fault` strings as agent-controlled.** Deny/escalate
+  values are withheld, but a denied leaf's reason can carry an agent-chosen substring (see Non-goals).
 - **Rotate a leaked key, do not just delete the repo.** A pushed secret is a leaked secret.

@@ -91,6 +91,27 @@
       "symbols": []
     },
     {
+      "doc": "Command stag-probe is a SCRIPTED (no-model) MCP client for the gate \u2014 the model-independent half of the demo matrix. It connects to a stag-proxy over stdio, then runs a tiny line-based script of gated tool calls and huma",
+      "keywords": [
+        "cli",
+        "scripted",
+        "mcp",
+        "client",
+        "probe",
+        "gated",
+        "tools-list",
+        "verdict",
+        "approve",
+        "token",
+        "one-time",
+        "deterministic"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stag-probe/main.go",
+      "symbols": []
+    },
+    {
       "doc": "Command stag-proxy is the standing gating MCP server \u2014 the front door an agent host connects to (Planning/24). It is an MCP SERVER to the agent and an MCP CLIENT to the real downstream server, with the deterministic gate",
       "keywords": [
         "cmd",
@@ -161,6 +182,27 @@
       "layer": "binary",
       "package": "main",
       "path": "stoa-kernel/cmd/stag-tools/main.go",
+      "symbols": []
+    },
+    {
+      "doc": "Command stag-verify replays a hash-chained stag audit log and reports whether the chain is INTACT \u2014 the \"verify the audit yourself\" half of verifiable control. It recomputes every leaf hash and the prev-hash links (egres",
+      "keywords": [
+        "cli",
+        "verify",
+        "audit",
+        "chain",
+        "tamper-evident",
+        "replay",
+        "leaves",
+        "allow",
+        "deny",
+        "escalate",
+        "signed",
+        "checkpoint"
+      ],
+      "layer": "binary",
+      "package": "main",
+      "path": "stoa-kernel/cmd/stag-verify/main.go",
       "symbols": []
     },
     {

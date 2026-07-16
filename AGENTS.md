@@ -36,7 +36,7 @@ stoa-kernel/   one Go module, the whole backend
   architecture_test.go   the one-way-dependency guard
 frontend/      the console (a modified Next.js), talking to both backends
 config/        event map + model config        data/  runtime state (gitignored)
-docs/          recipe authoring, routes, the MCP proxy, docker, development
+docs/          doctrine, context-binding, recipe authoring, routes, the MCP proxy, docker, development
 examples/      custom-tool (start here), local-tools, oauth-profiles
 tools/         build, up, down, check, hygiene, sbom, find, index
 ```

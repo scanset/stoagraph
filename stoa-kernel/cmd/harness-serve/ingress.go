@@ -110,6 +110,10 @@ func (s *Server) runIngressEvent(dec dispatch.Decision, event dispatch.Event, en
 			log.Printf("ingress[%s]: PROPOSE %s(%s)", tag, e.Tool, e.Args)
 		case "verdict":
 			log.Printf("ingress[%s]:   gate %s %s -> %s", tag, verdictWord(e.Allowed), e.Tool, e.Result)
+		case "text": // the advertised gated-tool list (tools/list) + other session narration
+			log.Printf("ingress[%s]: %s", tag, e.Text)
+		case "dispatch": // session bind + untrusted-context reads
+			log.Printf("ingress[%s]: %s", tag, e.Result)
 		case "error":
 			log.Printf("ingress[%s]: error: %s", tag, e.Text)
 		case "done":

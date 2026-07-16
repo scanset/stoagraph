@@ -1,7 +1,9 @@
 recipe: reroute_policy
 version: 1
+# Data-residency policy: EU customer traffic must stay in the EU. The ONLY sanctioned failover
+# for eu-west is eu-central. A US (or any non-EU) failover target is a residency violation and is denied.
 rules:
-  target.ok: {kind: set_membership, set: ["eu-central", "us-east", "us-west"]}
+  target.ok: {kind: set_membership, set: ["eu-central"]}
 steps:
   - {id: p, kind: propose, out: target}
   - {id: s, kind: sink, in: target, field: ops.reroute, sensitivity: authoritative, rule: target.ok, actor: "policy:reroute"}

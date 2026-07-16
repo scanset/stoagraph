@@ -500,6 +500,11 @@ Command healthcheck is a container liveness probe: GET a URL, exit 0 on 2xx, 1 o
 
 **kw:** container · liveness · probe · static · distroless · no-shell · exit-code
 
+### `stoa-kernel/cmd/stag-probe/main.go`
+Command stag-probe is a SCRIPTED (no-model) MCP client for the gate — the model-independent half of the demo matrix. It connects to a stag-proxy over stdio, then runs a tiny line-based script of gated tool calls and huma
+
+**kw:** cli · scripted · mcp · client · probe · gated · tools-list · verdict · approve · token · one-time · deterministic
+
 ### `stoa-kernel/cmd/stag-proxy/main.go`
 Command stag-proxy is the standing gating MCP server — the front door an agent host connects to (Planning/24). It is an MCP SERVER to the agent and an MCP CLIENT to the real downstream server, with the deterministic gate
 
@@ -516,6 +521,11 @@ Command stag-serve runs the HTTP API over the gating proxy (Planning/16) — the
 Command stag-tools serves a DECLARED set of local commands to an agent as MCP tools.  This is how you give a model real local capability without ever giving it a shell.  stag-tools -config tools.yaml            # stdio  
 
 **kw:** cmd · stag-tools · local · tools · mcp · stdio · http · declared · no-shell · gate-able
+
+### `stoa-kernel/cmd/stag-verify/main.go`
+Command stag-verify replays a hash-chained stag audit log and reports whether the chain is INTACT — the "verify the audit yourself" half of verifiable control. It recomputes every leaf hash and the prev-hash links (egres
+
+**kw:** cli · verify · audit · chain · tamper-evident · replay · leaves · allow · deny · escalate · signed · checkpoint
 
 ### `stoa-kernel/cmd/stoagraph/main.go`
 Command stoagraph is the installer and launcher: one binary that gets you from nothing to a running, authenticated gate.  stoagraph up       mint the secrets, pull the signed images, start, print the login link stoagraph
